@@ -1,4 +1,4 @@
-/*
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8; coding: utf-8 -*-
  * gtksourcecompletion.c
  * This file is part of gtksourcecompletion
  *
@@ -34,6 +34,7 @@
 #include <gtksourceview/gtksourcecompletion.h>
 #include "gtksourceview-i18n.h"
 #include "gtksourcecompletionmodel.h"
+#include <gtksourceview/gtksourcecompletioncontext.h>
 #include <string.h>
 #include <gtksourceview/gtksourceview.h>
 #include "gtksourcecompletion-private.h"
@@ -110,8 +111,11 @@ struct _GtkSourceCompletionPrivate
 	
 	gint typing_line;
 	gint typing_line_offset;
-	
+
+	/*TODO remove this*/
 	GtkSourceCompletionProvider *filter_provider;
+
+	GtkSourceCompletionContext *context;
 	
 	gboolean inserting_data;
 	gboolean is_interactive;
@@ -1195,6 +1199,9 @@ gtk_source_completion_dispose (GObject *object)
 		g_list_foreach (completion->priv->providers, (GFunc)g_object_unref, NULL);
 	}
 	
+	if (completion->priv->context)
+		g_object_unref(completion->priv->context);
+	
 	G_OBJECT_CLASS (gtk_source_completion_parent_class)->dispose (object);
 }
 
@@ -1883,7 +1890,6 @@ gtk_source_completion_init (GtkSourceCompletion *completion)
 	                                                          g_str_equal,
 	                                                          (GDestroyNotify)g_free,
 	                                                          (GDestroyNotify)g_list_free);
-
 	initialize_ui (completion);
 }
 
@@ -1891,6 +1897,7 @@ static void
 add_proposals (GtkSourceCompletion         *completion,
                GtkSourceCompletionProvider *provider)
 {
+	/*TODO Do it with the context
 	GList *proposals;
 	GList *item;
 	GtkSourceCompletionProposal *proposal;
@@ -1917,6 +1924,7 @@ add_proposals (GtkSourceCompletion         *completion,
 	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
 
 	g_list_free (proposals);
+	*/
 }
 
 static gchar **
@@ -1987,6 +1995,16 @@ remove_capabilities (GtkSourceCompletion          *completion,
 	}
 }
 
+static void
+context_proposals_added_cb (GtkSourceCompletionContext 	*context,
+			    GtkSourceCompletionProvider *provider,
+			    GList			*proposals,
+			    GtkSourceCompletion		*completion)
+{
+	/*TODO Add the proposals to the model*/
+	g_debug ("completion proposals added");
+}
+			    
 /**
  * gtk_source_completion_show:
  * @completion: A #GtkSourceCompletion
@@ -1995,7 +2013,7 @@ remove_capabilities (GtkSourceCompletion          *completion,
  *
  * Shows the show completion window. If @place if %NULL the popup window will
  * be placed on the cursor position.
- *
+*
  * Returns: %TRUE if it was possible to the show completion window.
  */
 gboolean
@@ -2030,6 +2048,21 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 							  place);
 	}
 
+	/*TODO Create the context and call all providers to populate*/
+	if (completion->priv->context)
+		g_object_unref(completion->priv->context);
+
+	//TODO Create a context_new to create the context and connect to signals
+	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view));
+	g_signal_connect (completion->priv->context,
+				  "proposals-added",
+				  G_CALLBACK (context_proposals_added_cb),
+				  completion);
+	
+	//TOO Create a context free to free the context and disconnect
+	//signals when the completion finish
+
+	
 	/* Make sure all providers are ours */
 	for (l = providers; l; l = g_list_next (l))
 	{
@@ -2040,7 +2073,11 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 				g_list_prepend (completion->priv->active_providers,
 				                l->data);
 
-			add_proposals (completion, GTK_SOURCE_COMPLETION_PROVIDER (l->data));
+			//add_proposals (completion,
+			//GTK_SOURCE_COMPLETION_PROVIDER (l->data));
+			//Connect to proposals-added signal
+			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),
+									    completion->priv->context);
 		}
 	}
 

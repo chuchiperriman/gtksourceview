@@ -79,13 +79,17 @@ then
 		webkit-1.0
 	], have_devhelp=yes, have_devhelp=no)
 	
-	if test "x$have_devhelp" = "xyes"
+	#Disable devhelp by the moment
+	#if test "x$have_devhelp" = "xyes"
+	if test "x$have_devhelpno" = "xyes"
 	then
 		AC_DEFINE([HAVE_DEVHELP], 1, [Have devhelp])
 	fi
 fi
 
-AM_CONDITIONAL(USE_DEVHELP, test "x$have_devhelp" = "xyes")
+#Disable devhelp by the moment
+#AM_CONDITIONAL(USE_DEVHELP, test "x$have_devhelp" = "xyes")
+AM_CONDITIONAL(USE_DEVHELP, test "x$have_devhelpno" = "xyes")
 
 # i18N stuff
 GETTEXT_PACKAGE=gtksourceview-2.0

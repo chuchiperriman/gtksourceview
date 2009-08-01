@@ -60,9 +60,9 @@ append_item (GList *list, const gchar *name, GdkPixbuf *icon, const gchar *info)
 	return g_list_append (list, prop);
 }
 
-static GList *
-gsc_provider_test_get_proposals (GtkSourceCompletionProvider *base,
-                                 GtkTextIter                 *iter)
+static void
+gsc_provider_test_populate_completion (GtkSourceCompletionProvider *base,
+				       GtkSourceCompletionContext  *context)
 {
 	GscProviderTest *provider = GSC_PROVIDER_TEST (base);
 	GList *list = NULL;
@@ -71,10 +71,14 @@ gsc_provider_test_get_proposals (GtkSourceCompletionProvider *base,
 	list = append_item (list, "ab", provider->priv->proposal_icon, "Info proposal 1.2");
 	list = append_item (list, "bc", provider->priv->proposal_icon, "Info proposal 1.3");
 	list = append_item (list, "bd", provider->priv->proposal_icon, "Info proposal 1.3");
-	
-	return list;
+
+	gtk_source_completion_context_add_proposals (context, base, list);
+
+	//TODO Who frees the list?
+
 }
 
+/*
 static gboolean
 gsc_provider_test_filter_proposal (GtkSourceCompletionProvider *provider,
                                    GtkSourceCompletionProposal *proposal,
@@ -86,6 +90,7 @@ gsc_provider_test_filter_proposal (GtkSourceCompletionProvider *provider,
 	label = gtk_source_completion_proposal_get_label (proposal);
 	return g_str_has_prefix (label, criteria);
 }
+*/
 
 static const gchar *
 gsc_provider_test_get_capabilities (GtkSourceCompletionProvider *provider)
@@ -130,8 +135,8 @@ gsc_provider_test_iface_init (GtkSourceCompletionProviderIface *iface)
 	iface->get_name = gsc_provider_test_get_name;
 	iface->get_icon = gsc_provider_test_get_icon;
 
-	iface->get_proposals = gsc_provider_test_get_proposals;
-	iface->filter_proposal = gsc_provider_test_filter_proposal;
+	iface->populate_completion = gsc_provider_test_populate_completion;
+	//iface->filter_proposal = gsc_provider_test_filter_proposal;
 	iface->get_capabilities = gsc_provider_test_get_capabilities;
 }
 

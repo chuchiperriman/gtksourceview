@@ -42,18 +42,16 @@ G_BEGIN_DECLS
 typedef struct _GtkSourceCompletionProvider GtkSourceCompletionProvider;
 typedef struct _GtkSourceCompletionProviderIface GtkSourceCompletionProviderIface;
 
+#include <gtksourceview/gtksourcecompletioncontext.h>
+
 struct _GtkSourceCompletionProviderIface
 {
 	GTypeInterface g_iface;
 	
 	const gchar	*(*get_name)       	(GtkSourceCompletionProvider *provider);
 	GdkPixbuf	*(*get_icon)       	(GtkSourceCompletionProvider *provider);
-	GList 		*(*get_proposals) 	(GtkSourceCompletionProvider *provider,
-						 GtkTextIter                 *iter);
-	gboolean 	 (*filter_proposal) 	(GtkSourceCompletionProvider *provider,
-						 GtkSourceCompletionProposal *proposal,
-						 GtkTextIter                 *iter,
-						 const gchar                 *criteria);
+	void		 (*populate_completion)	(GtkSourceCompletionProvider *provider,
+						 GtkSourceCompletionContext  *context);
 
 	const gchar     *(*get_capabilities)	(GtkSourceCompletionProvider *provider);
 
@@ -68,33 +66,28 @@ struct _GtkSourceCompletionProviderIface
 						 GtkTextIter                 *iter);
 };
 
-GType		 gtk_source_completion_provider_get_type	(void);
+GType		 gtk_source_completion_provider_get_type		(void);
 
 
-const gchar	*gtk_source_completion_provider_get_name	(GtkSourceCompletionProvider *provider);
+const gchar	*gtk_source_completion_provider_get_name		(GtkSourceCompletionProvider *provider);
 
-GdkPixbuf	*gtk_source_completion_provider_get_icon	(GtkSourceCompletionProvider *provider);
+GdkPixbuf	*gtk_source_completion_provider_get_icon		(GtkSourceCompletionProvider *provider);
 
-GList		*gtk_source_completion_provider_get_proposals	(GtkSourceCompletionProvider *provider,
-								 GtkTextIter                 *iter);
+void		 gtk_source_completion_provider_populate_completion	(GtkSourceCompletionProvider *provider,
+									 GtkSourceCompletionContext  *context);
 
-gboolean	 gtk_source_completion_provider_filter_proposal	(GtkSourceCompletionProvider *provider,
-								 GtkSourceCompletionProposal *proposal,
-								 GtkTextIter                 *iter,
-								 const gchar                 *criteria);
+const gchar 	*gtk_source_completion_provider_get_capabilities 	(GtkSourceCompletionProvider *provider);
 
-const gchar 	*gtk_source_completion_provider_get_capabilities (GtkSourceCompletionProvider *provider);
+GtkWidget	*gtk_source_completion_provider_get_info_widget		(GtkSourceCompletionProvider *provider,
+									 GtkSourceCompletionProposal *proposal);
 
-GtkWidget	*gtk_source_completion_provider_get_info_widget	(GtkSourceCompletionProvider *provider,
-								 GtkSourceCompletionProposal *proposal);
+void 		 gtk_source_completion_provider_update_info		(GtkSourceCompletionProvider *provider,
+									 GtkSourceCompletionProposal *proposal,
+									 GtkSourceCompletionInfo     *info);
 
-void 		 gtk_source_completion_provider_update_info	(GtkSourceCompletionProvider *provider,
-								 GtkSourceCompletionProposal *proposal,
-								 GtkSourceCompletionInfo     *info);
-
-gboolean	 gtk_source_completion_provider_activate_proposal (GtkSourceCompletionProvider *provider,
-								   GtkSourceCompletionProposal *proposal,
-								   GtkTextIter                 *iter);
+gboolean	 gtk_source_completion_provider_activate_proposal 	(GtkSourceCompletionProvider *provider,
+									 GtkSourceCompletionProposal *proposal,
+									 GtkTextIter                 *iter);
 
 G_END_DECLS
 
