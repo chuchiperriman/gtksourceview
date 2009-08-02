@@ -81,6 +81,9 @@ void				 gtk_source_completion_context_get_iter		(GtkSourceCompletionContext	*co
 
 gchar				*gtk_source_completion_context_get_criteria	(GtkSourceCompletionContext	*context);
 
+GList				*gtk_source_completion_context_get_proposals	(GtkSourceCompletionContext	*context,
+										 GtkSourceCompletionProvider	*provider);
+
 G_END_DECLS
 
 #endif

@@ -550,9 +550,9 @@ select_provider (GtkSourceCompletion *completion,
 		{
 			completion->priv->filter_provider = NULL;
 			
-			update_selection_label (completion);
 			//do_refilter (completion, FALSE);
-			
+			update_selection_label (completion);
+
 			return TRUE;
 		}
 
@@ -619,7 +619,8 @@ select_provider (GtkSourceCompletion *completion,
 	}
 	
 	update_selection_label (completion);
-	//do_refilter (completion, FALSE);
+
+	//TODO do_refilter (completion, FALSE);
 	
 	return TRUE;
 }
@@ -2002,7 +2003,27 @@ context_proposals_added_cb (GtkSourceCompletionContext 	*context,
 			    GtkSourceCompletion		*completion)
 {
 	/*TODO Add the proposals to the model*/
-	g_debug ("completion proposals added");
+	GList *item;
+	GtkSourceCompletionProposal *proposal;
+
+	completion->priv->inserting_data = TRUE;
+	
+	for (item = proposals; item; item = g_list_next (item))
+	{
+		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		{
+			//TODO Do this better
+			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+			gtk_source_completion_model_append (completion->priv->model_proposals,
+	                                                    provider,
+	                                                    proposal);
+			g_object_unref (proposal);
+		}
+	}
+
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
+
+	g_list_free (proposals);
 }
 			    
 /**

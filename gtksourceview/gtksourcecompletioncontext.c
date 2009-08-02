@@ -42,11 +42,22 @@ struct _GtkSourceCompletionContextPrivate
 	GtkTextView	*view;
 	GtkTextIter 	iter;
 	gchar 		*criteria;
+	GHashTable	*providers_table;
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
 G_DEFINE_TYPE (GtkSourceCompletionContext, gtk_source_completion_context, G_TYPE_OBJECT);
+
+static void
+free_table_entry (GtkSourceCompletionProvider *provider,
+		  GList *proposals,
+		  GtkSourceCompletionContext *context)
+{
+	g_object_unref (provider);
+	g_list_free (proposals);
+	//TODO Free the list and the proposals
+}
 
 static void
 gtk_source_completion_context_class_init (GtkSourceCompletionContextClass *klass)
@@ -85,7 +96,12 @@ static void
 gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 {
 	self->priv = GTK_SOURCE_COMPLETION_CONTEXT_GET_PRIVATE (self);
+	
+	self->priv->providers_table = g_hash_table_new (g_direct_hash,
+							g_direct_equal);
 	self->priv->criteria = NULL;
+
+	g_debug ("context init");
 }
 
 static void
@@ -93,8 +109,14 @@ gtk_source_completion_context_finalize (GObject *object)
 {
 	GtkSourceCompletionContext *self = (GtkSourceCompletionContext *)object;
 
+	g_debug ("context finalize");
+	
 	g_free (self->priv->criteria);
 
+	//TODO free the table content
+	g_hash_table_foreach (self->priv->providers_table, (GHFunc)free_table_entry, self);
+	g_hash_table_destroy (self->priv->providers_table);
+	
 	g_signal_handlers_destroy (object);
 	G_OBJECT_CLASS (gtk_source_completion_context_parent_class)->finalize (object);
 }
@@ -111,7 +133,7 @@ gtk_source_completion_context_new (GtkTextView	*view)
 	                                  gtk_text_buffer_get_insert (buffer));
 	
 	context->priv->view = view;
-	//TODO context->priv->criteria = g_strdup (criteria);
+	//TODO context->priv->criteria 
 	return context;
 }
 
@@ -120,9 +142,22 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 					     GtkSourceCompletionProvider	*provider,
 					     GList	 			*proposals)
 {
-	g_debug ("add proposals");
-	/*TODO Emit the "proposals-added" signal and the completion will add
-	  the proposals to the model*/
+	GList *cached;
+
+	cached = g_hash_table_lookup (context->priv->providers_table, provider);
+
+	if (cached != NULL)
+	{
+		cached = g_list_concat (cached, g_list_copy (proposals));
+	}
+	else
+	{
+		g_object_ref (provider);
+		cached = g_list_copy (proposals);
+	}
+
+	g_hash_table_insert (context->priv->providers_table, provider, cached);
+	
 	g_signal_emit_by_name (context, "proposals-added", provider, proposals);
 }
 
@@ -130,7 +165,7 @@ void
 gtk_source_completion_context_finish (GtkSourceCompletionContext	*context)
 {
 	/*TODO Clean and emit the "finished" signal*/
-	//g_signal_emit (context, signals[FINISHED], 0);
+	g_signal_emit (context, signals[FINISHED], 0);
 }
 
 GtkTextView*
@@ -164,4 +199,21 @@ gtk_source_completion_context_get_criteria (GtkSourceCompletionContext	*context)
 	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT(context), NULL);
 
 	return context->priv->criteria;
+}
+
+/**
+ * gtk_source_completion_context_get_proposals:
+ * @context: 
+ * @provider: 
+ *
+ * 
+ *
+ * Returns: The internal list of proposals for that provider. Do not modify it.
+ **/
+GList*
+gtk_source_completion_context_get_proposals (GtkSourceCompletionContext		*context,
+					     GtkSourceCompletionProvider	*provider)
+{
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT(context), NULL);
+	return g_hash_table_lookup (context->priv->providers_table, provider);
 }
