@@ -66,7 +66,8 @@ struct _GtkSourceCompletionContext
 
 GType	 			 gtk_source_completion_context_get_type		(void) G_GNUC_CONST;
 
-GtkSourceCompletionContext	*gtk_source_completion_context_new		(GtkTextView	*view);
+GtkSourceCompletionContext	*gtk_source_completion_context_new		(GtkTextView	*view,
+										 GList		*providers);
 
 void				 gtk_source_completion_context_add_proposals	(GtkSourceCompletionContext	*context,
 										 GtkSourceCompletionProvider	*provider,
@@ -83,6 +84,8 @@ gchar				*gtk_source_completion_context_get_criteria	(GtkSourceCompletionContext
 
 GList				*gtk_source_completion_context_get_proposals	(GtkSourceCompletionContext	*context,
 										 GtkSourceCompletionProvider	*provider);
+
+GList				*gtk_source_completion_context_get_providers	(GtkSourceCompletionContext 	*context);
 
 G_END_DECLS
 

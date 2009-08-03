@@ -42,7 +42,8 @@ struct _GtkSourceCompletionContextPrivate
 	GtkTextView	*view;
 	GtkTextIter 	iter;
 	gchar 		*criteria;
-	GHashTable	*providers_table;
+	GList		*providers;
+	GHashTable	*proposals_table;
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -55,8 +56,8 @@ free_table_entry (GtkSourceCompletionProvider *provider,
 		  GtkSourceCompletionContext *context)
 {
 	g_object_unref (provider);
+	g_list_foreach (proposals, (GFunc)g_object_unref, NULL);
 	g_list_free (proposals);
-	//TODO Free the list and the proposals
 }
 
 static void
@@ -97,7 +98,7 @@ gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 {
 	self->priv = GTK_SOURCE_COMPLETION_CONTEXT_GET_PRIVATE (self);
 	
-	self->priv->providers_table = g_hash_table_new (g_direct_hash,
+	self->priv->proposals_table = g_hash_table_new (g_direct_hash,
 							g_direct_equal);
 	self->priv->criteria = NULL;
 
@@ -113,16 +114,16 @@ gtk_source_completion_context_finalize (GObject *object)
 	
 	g_free (self->priv->criteria);
 
-	//TODO free the table content
-	g_hash_table_foreach (self->priv->providers_table, (GHFunc)free_table_entry, self);
-	g_hash_table_destroy (self->priv->providers_table);
+	g_hash_table_foreach (self->priv->proposals_table, (GHFunc)free_table_entry, self);
+	g_hash_table_destroy (self->priv->proposals_table);
 	
 	g_signal_handlers_destroy (object);
 	G_OBJECT_CLASS (gtk_source_completion_context_parent_class)->finalize (object);
 }
 
 GtkSourceCompletionContext*
-gtk_source_completion_context_new (GtkTextView	*view)
+gtk_source_completion_context_new (GtkTextView	*view,
+				   GList *providers)
 {
 	GtkTextBuffer *buffer;
 	GtkSourceCompletionContext *context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
@@ -133,6 +134,7 @@ gtk_source_completion_context_new (GtkTextView	*view)
 	                                  gtk_text_buffer_get_insert (buffer));
 	
 	context->priv->view = view;
+	context->priv->providers = g_list_copy (providers);
 	//TODO context->priv->criteria 
 	return context;
 }
@@ -144,7 +146,15 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 {
 	GList *cached;
 
-	cached = g_hash_table_lookup (context->priv->providers_table, provider);
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
+	g_return_if_fail (proposals != NULL);
+
+	//TODO Check if the provider is in the providers list
+
+	g_list_foreach (proposals, (GFunc)g_object_ref, NULL);
+
+	cached = g_hash_table_lookup (context->priv->proposals_table, provider);
 
 	if (cached != NULL)
 	{
@@ -156,7 +166,7 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 		cached = g_list_copy (proposals);
 	}
 
-	g_hash_table_insert (context->priv->providers_table, provider, cached);
+	g_hash_table_insert (context->priv->proposals_table, provider, cached);
 	
 	g_signal_emit_by_name (context, "proposals-added", provider, proposals);
 }
@@ -165,6 +175,7 @@ void
 gtk_source_completion_context_finish (GtkSourceCompletionContext	*context)
 {
 	/*TODO Clean and emit the "finished" signal*/
+	
 	g_signal_emit (context, signals[FINISHED], 0);
 }
 
@@ -202,6 +213,23 @@ gtk_source_completion_context_get_criteria (GtkSourceCompletionContext	*context)
 }
 
 /**
+ * gtk_source_completion_context_get_providers:
+ * @context: 
+ *
+ * 
+ *
+ * Returns: The internal list of providers for this context
+ **/
+GList*
+gtk_source_completion_context_get_providers (GtkSourceCompletionContext *context)
+{
+
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context), NULL);
+	
+	return context->priv->providers;
+}
+
+/**
  * gtk_source_completion_context_get_proposals:
  * @context: 
  * @provider: 
@@ -214,6 +242,9 @@ GList*
 gtk_source_completion_context_get_proposals (GtkSourceCompletionContext		*context,
 					     GtkSourceCompletionProvider	*provider)
 {
-	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT(context), NULL);
-	return g_hash_table_lookup (context->priv->providers_table, provider);
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context), NULL);
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider), NULL);
+	
+	return g_hash_table_lookup (context->priv->proposals_table, provider);
 }
+

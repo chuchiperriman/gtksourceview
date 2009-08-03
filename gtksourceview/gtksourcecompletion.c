@@ -104,7 +104,6 @@ struct _GtkSourceCompletionPrivate
 
 	GList *providers;
 	GHashTable *capability_map;
-	GList *active_providers;
 	
 	guint show_timed_out_id;
 	guint auto_complete_delay;
@@ -456,11 +455,15 @@ get_num_visible_providers (GtkSourceCompletion *completion,
                            guint               *num,
                            guint               *current)
 {
+	GList *providers;
+	GList *proposals;
 	GList *item;
 	*num = 0;
 	*current = 0;
 	
-	for (item = completion->priv->active_providers; item; item = g_list_next (item))
+	providers = gtk_source_completion_context_get_providers (completion->priv->context);
+	
+	for (item = providers; item; item = g_list_next (item))
 	{
 		if (item->data == completion->priv->filter_provider)
 		{
@@ -468,9 +471,10 @@ get_num_visible_providers (GtkSourceCompletion *completion,
 		}
 		else
 		{
+			proposals = gtk_source_completion_context_get_proposals (completion->priv->context,
+										 GTK_SOURCE_COMPLETION_PROVIDER (item->data));
 			/* See if it has anything */
-			if (gtk_source_completion_model_n_proposals (completion->priv->model_proposals,
-			                                             GTK_SOURCE_COMPLETION_PROVIDER (item->data)))
+			if (proposals != NULL)
 			{
 				++*num;
 			}
@@ -528,6 +532,8 @@ select_provider (GtkSourceCompletion *completion,
                  ListSelector         cycle_first,
                  ListSelector         cycle_last)
 {
+	GList *providers;
+	GList *proposals;
 	GList *first;
 	GList *last;
 	GList *orig;
@@ -535,13 +541,14 @@ select_provider (GtkSourceCompletion *completion,
 	GtkSourceCompletionProvider *provider;
 	guint num;
 	guint pos;
-	
+
+	providers = gtk_source_completion_context_get_providers (completion->priv->context);
 	/* If there is only one provider, then there is no other selection */
-	if (completion->priv->active_providers->next == NULL)
+	if (providers->next == NULL)
 	{
 		return FALSE;
 	}
-	
+
 	get_num_visible_providers (completion, &num, &pos);
 	
 	if (num <= 1)
@@ -561,7 +568,7 @@ select_provider (GtkSourceCompletion *completion,
 
 	if (completion->priv->filter_provider != NULL)
 	{
-		orig = g_list_find (completion->priv->active_providers,
+		orig = g_list_find (providers,
 		                    completion->priv->filter_provider);
 	}
 	else
@@ -569,8 +576,8 @@ select_provider (GtkSourceCompletion *completion,
 		orig = NULL;
 	}
 	
-	first = cycle_first (completion->priv->active_providers);
-	last = cycle_last (completion->priv->active_providers);
+	first = cycle_first (providers);
+	last = cycle_last (providers);
 	current = orig;
 	
 	do
@@ -591,7 +598,9 @@ select_provider (GtkSourceCompletion *completion,
 		if (current != NULL)
 		{
 			provider = GTK_SOURCE_COMPLETION_PROVIDER (current->data);
-	
+
+			break;
+			//TODO reenable this check using the context
 			if (gtk_source_completion_model_n_proposals (completion->priv->model_proposals,
 			                                             provider) != 0)
 			{
@@ -619,8 +628,38 @@ select_provider (GtkSourceCompletion *completion,
 	}
 	
 	update_selection_label (completion);
-
 	//TODO do_refilter (completion, FALSE);
+
+	/*******************TODO Testing*****************/
+	gtk_source_completion_model_clear (completion->priv->model_proposals);
+	
+	if (completion->priv->filter_provider != NULL)
+	{
+		first = g_list_append (NULL, completion->priv->filter_provider);
+	}
+	else
+	{
+		first = g_list_copy (providers);
+	}
+
+	for (current = first; current != NULL; current = g_list_next (current))
+	{
+		provider = GTK_SOURCE_COMPLETION_PROVIDER (current->data);
+		proposals = gtk_source_completion_context_get_proposals (completion->priv->context,
+									 provider);
+			
+		for (;proposals != NULL; proposals = g_list_next (proposals))
+		{
+			gtk_source_completion_model_append (completion->priv->model_proposals,
+							    provider,
+							    GTK_SOURCE_COMPLETION_PROPOSAL (proposals->data));
+		}
+	}
+
+	g_list_free (first);
+	
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
+	/****************************************/
 	
 	return TRUE;
 }
@@ -1318,8 +1357,12 @@ gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 
 	gtk_source_completion_model_clear (completion->priv->model_proposals);
 
-	g_list_free (completion->priv->active_providers);
-	completion->priv->active_providers = NULL;
+	if (completion->priv->context)
+	{
+		//TODO disconnect the signal
+		g_object_unref(completion->priv->context);
+		completion->priv->context = NULL;
+	}
 	
 	completion->priv->info_visible = GTK_WIDGET_VISIBLE (completion->priv->info_window);
 }
@@ -1894,40 +1937,6 @@ gtk_source_completion_init (GtkSourceCompletion *completion)
 	initialize_ui (completion);
 }
 
-static void
-add_proposals (GtkSourceCompletion         *completion,
-               GtkSourceCompletionProvider *provider)
-{
-	/*TODO Do it with the context
-	GList *proposals;
-	GList *item;
-	GtkSourceCompletionProposal *proposal;
-	GtkTextIter iter;
-
-	get_iter_at_insert (completion, &iter);
-	
-	proposals = gtk_source_completion_provider_get_proposals (provider, &iter);
-	
-	completion->priv->inserting_data = TRUE;
-	
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
-		{
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-	                                                    provider,
-	                                                    proposal);
-			g_object_unref (proposal);
-		}
-	}
-
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
-	g_list_free (proposals);
-	*/
-}
-
 static gchar **
 get_separate_capabilities (GtkSourceCompletionProvider *provider)
 {
@@ -2069,20 +2078,16 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 							  place);
 	}
 
-	/*TODO Create the context and call all providers to populate*/
-	if (completion->priv->context)
-		g_object_unref(completion->priv->context);
-
 	//TODO Create a context_new to create the context and connect to signals
-	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view));
+	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
+								       providers);
 	g_signal_connect (completion->priv->context,
 				  "proposals-added",
 				  G_CALLBACK (context_proposals_added_cb),
 				  completion);
 	
-	//TOO Create a context free to free the context and disconnect
+	//TODO Create a context_free to free the context and disconnect
 	//signals when the completion finish
-
 	
 	/* Make sure all providers are ours */
 	for (l = providers; l; l = g_list_next (l))
@@ -2090,20 +2095,10 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 		if (g_list_find (completion->priv->providers,
 		                 l->data) != NULL)
 		{
-			completion->priv->active_providers =
-				g_list_prepend (completion->priv->active_providers,
-				                l->data);
-
-			//add_proposals (completion,
-			//GTK_SOURCE_COMPLETION_PROVIDER (l->data));
-			//Connect to proposals-added signal
 			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),
 									    completion->priv->context);
 		}
 	}
-
-	completion->priv->active_providers = 
-		g_list_reverse (completion->priv->active_providers);
 
 	completion->priv->is_interactive = FALSE;
 
