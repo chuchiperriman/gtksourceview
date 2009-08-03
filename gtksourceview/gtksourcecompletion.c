@@ -1156,7 +1156,8 @@ buffer_insert_text_cb (GtkTextBuffer       *buffer,
 		}
 		else
 		{
-			//FIXME create the context, remove items, and add new ones
+			//TODO update the context iter and criteria and call
+			//all providers to populate again
 			//refilter_proposals_with_word (completion);
 		}
 	}
@@ -1224,6 +1225,73 @@ connect_view (GtkSourceCompletion *completion)
 }
 
 static void
+context_proposals_added_cb (GtkSourceCompletionContext 	*context,
+			    GtkSourceCompletionProvider *provider,
+			    GList			*proposals,
+			    GtkSourceCompletion		*completion)
+{
+	/*TODO Add the proposals to the model*/
+	GList *item;
+	GtkSourceCompletionProposal *proposal;
+
+	if (completion->priv->filter_provider &&
+	    completion->priv->filter_provider != provider)
+	{
+		g_debug ("no filter");
+		return;
+	}
+		      
+	for (item = proposals; item; item = g_list_next (item))
+	{
+		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		{
+			//TODO Do this better
+			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+			gtk_source_completion_model_append (completion->priv->model_proposals,
+	                                                    provider,
+	                                                    proposal);
+			//TODO unref the proposal? I think not
+			g_object_unref (proposal);
+		}
+	}
+
+	g_debug ("readding");
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
+
+	g_list_free (proposals);
+}
+
+static void
+context_destroy (GtkSourceCompletion 	*completion)
+{
+
+	if (completion->priv->context)
+	{
+		g_signal_handlers_disconnect_by_func (completion->priv->context,
+						      context_proposals_added_cb,
+						      completion);
+		gtk_source_completion_context_finish (completion->priv->context);
+		g_object_unref(completion->priv->context);
+		completion->priv->context = NULL;
+	}
+}
+
+static void
+context_create (GtkSourceCompletion 	*completion,
+		GList 			*providers)
+{
+	/*Ensure there is not a completion active*/
+	context_destroy (completion);
+	
+	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
+								       providers);
+	g_signal_connect (completion->priv->context,
+				  "proposals-added",
+				  G_CALLBACK (context_proposals_added_cb),
+				  completion);
+}
+
+static void
 gtk_source_completion_dispose (GObject *object)
 {
 	GtkSourceCompletion *completion = GTK_SOURCE_COMPLETION (object);
@@ -1238,11 +1306,7 @@ gtk_source_completion_dispose (GObject *object)
 		g_list_foreach (completion->priv->providers, (GFunc)g_object_unref, NULL);
 	}
 	
-	if (completion->priv->context)
-	{
-		gtk_source_completion_context_finish (completion->priv->context);
-		g_object_unref(completion->priv->context);
-	}
+	context_destroy (completion);
 	
 	G_OBJECT_CLASS (gtk_source_completion_parent_class)->dispose (object);
 }
@@ -1348,44 +1412,6 @@ gtk_source_completion_set_property (GObject      *object,
 }
 
 static void
-context_proposals_added_cb (GtkSourceCompletionContext 	*context,
-			    GtkSourceCompletionProvider *provider,
-			    GList			*proposals,
-			    GtkSourceCompletion		*completion)
-{
-	/*TODO Add the proposals to the model*/
-	GList *item;
-	GtkSourceCompletionProposal *proposal;
-
-	if (completion->priv->filter_provider &&
-	    completion->priv->filter_provider != provider)
-	{
-		g_debug ("no filter");
-		return;
-	}
-		      
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
-		{
-			//TODO Do this better
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-	                                                    provider,
-	                                                    proposal);
-			//TODO unref the proposal? I think not
-			g_object_unref (proposal);
-		}
-	}
-
-	g_debug ("readding");
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
-	g_list_free (proposals);
-}
-
-
-static void
 gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 {
 	gtk_widget_hide (completion->priv->info_window);
@@ -1397,15 +1423,7 @@ gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 
 	gtk_source_completion_model_clear (completion->priv->model_proposals);
 
-	if (completion->priv->context)
-	{
-		g_signal_handlers_disconnect_by_func (completion->priv->context,
-						      context_proposals_added_cb,
-						      completion);
-		gtk_source_completion_context_finish (completion->priv->context);
-		g_object_unref(completion->priv->context);
-		completion->priv->context = NULL;
-	}
+	context_destroy (completion);
 	
 	completion->priv->info_visible = GTK_WIDGET_VISIBLE (completion->priv->info_window);
 }
@@ -2089,16 +2107,7 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 							  place);
 	}
 
-	//TODO Create a context_new to create the context and connect to signals
-	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
-								       providers);
-	g_signal_connect (completion->priv->context,
-				  "proposals-added",
-				  G_CALLBACK (context_proposals_added_cb),
-				  completion);
-	
-	//TODO Create a context_free to free the context and disconnect
-	//signals when the completion finish
+	context_create (completion, providers);
 	
 	/* Make sure all providers are ours */
 	for (l = providers; l; l = g_list_next (l))
