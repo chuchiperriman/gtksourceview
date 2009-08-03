@@ -116,7 +116,6 @@ struct _GtkSourceCompletionPrivate
 
 	GtkSourceCompletionContext *context;
 	
-	gboolean inserting_data;
 	gboolean is_interactive;
 	gulong signals_ids[LAST_EXTERNAL_SIGNAL];
 };
@@ -1240,7 +1239,10 @@ gtk_source_completion_dispose (GObject *object)
 	}
 	
 	if (completion->priv->context)
+	{
+		gtk_source_completion_context_finish (completion->priv->context);
 		g_object_unref(completion->priv->context);
+	}
 	
 	G_OBJECT_CLASS (gtk_source_completion_parent_class)->dispose (object);
 }
@@ -1346,6 +1348,44 @@ gtk_source_completion_set_property (GObject      *object,
 }
 
 static void
+context_proposals_added_cb (GtkSourceCompletionContext 	*context,
+			    GtkSourceCompletionProvider *provider,
+			    GList			*proposals,
+			    GtkSourceCompletion		*completion)
+{
+	/*TODO Add the proposals to the model*/
+	GList *item;
+	GtkSourceCompletionProposal *proposal;
+
+	if (completion->priv->filter_provider &&
+	    completion->priv->filter_provider != provider)
+	{
+		g_debug ("no filter");
+		return;
+	}
+		      
+	for (item = proposals; item; item = g_list_next (item))
+	{
+		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		{
+			//TODO Do this better
+			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+			gtk_source_completion_model_append (completion->priv->model_proposals,
+	                                                    provider,
+	                                                    proposal);
+			//TODO unref the proposal? I think not
+			g_object_unref (proposal);
+		}
+	}
+
+	g_debug ("readding");
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
+
+	g_list_free (proposals);
+}
+
+
+static void
 gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 {
 	gtk_widget_hide (completion->priv->info_window);
@@ -1359,7 +1399,10 @@ gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 
 	if (completion->priv->context)
 	{
-		//TODO disconnect the signal
+		g_signal_handlers_disconnect_by_func (completion->priv->context,
+						      context_proposals_added_cb,
+						      completion);
+		gtk_source_completion_context_finish (completion->priv->context);
 		g_object_unref(completion->priv->context);
 		completion->priv->context = NULL;
 	}
@@ -1694,8 +1737,6 @@ static void
 on_items_added_cb (GtkSourceCompletionModel *model,
 		   GtkSourceCompletion      *completion)
 {
-	completion->priv->inserting_data = FALSE;
-
 	/* Check if there are any completions */
 	if (gtk_source_completion_model_is_empty (model, FALSE))
 	{
@@ -2003,36 +2044,6 @@ remove_capabilities (GtkSourceCompletion          *completion,
 	{
 		g_strfreev (orig);
 	}
-}
-
-static void
-context_proposals_added_cb (GtkSourceCompletionContext 	*context,
-			    GtkSourceCompletionProvider *provider,
-			    GList			*proposals,
-			    GtkSourceCompletion		*completion)
-{
-	/*TODO Add the proposals to the model*/
-	GList *item;
-	GtkSourceCompletionProposal *proposal;
-
-	completion->priv->inserting_data = TRUE;
-	
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
-		{
-			//TODO Do this better
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-	                                                    provider,
-	                                                    proposal);
-			g_object_unref (proposal);
-		}
-	}
-
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
-	g_list_free (proposals);
 }
 			    
 /**
