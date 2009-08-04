@@ -21,6 +21,7 @@
  */
 
 #include "gtksourcecompletioncontext.h"
+#include "gtksourcecompletionutils.h"
 #include "gtksourceview-marshal.h"
 
 #define GTK_SOURCE_COMPLETION_CONTEXT_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), \
@@ -44,6 +45,7 @@ struct _GtkSourceCompletionContextPrivate
 	gchar 		*criteria;
 	GList		*providers;
 	GHashTable	*proposals_table;
+	gboolean	invalidated;
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -101,6 +103,7 @@ gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 	self->priv->proposals_table = g_hash_table_new (g_direct_hash,
 							g_direct_equal);
 	self->priv->criteria = NULL;
+	self->priv->invalidated = FALSE;
 
 	g_debug ("context init");
 }
@@ -125,17 +128,18 @@ GtkSourceCompletionContext*
 gtk_source_completion_context_new (GtkTextView	*view,
 				   GList *providers)
 {
-	GtkTextBuffer *buffer;
+	GtkTextBuffer 	*buffer;
+	GtkTextIter	iter;
 	GtkSourceCompletionContext *context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
 
 	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
 	gtk_text_buffer_get_iter_at_mark (buffer,
-	                                  &(context->priv->iter),
+	                                  &iter,
 	                                  gtk_text_buffer_get_insert (buffer));
 	
 	context->priv->view = view;
 	context->priv->providers = g_list_copy (providers);
-	//TODO context->priv->criteria 
+	gtk_source_completion_context_set_iter (context, &iter);
 	return context;
 }
 
@@ -149,6 +153,7 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
 	g_return_if_fail (proposals != NULL);
+	g_return_if_fail (!context->priv->invalidated);
 
 	//TODO Check if the provider is in the providers list
 
@@ -174,9 +179,12 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 void
 gtk_source_completion_context_finish (GtkSourceCompletionContext	*context)
 {
-	/*TODO Clean and emit the "finished" signal*/
-	
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
+	g_return_if_fail (!context->priv->invalidated);
+
+	/*TODO We must invalidate the context*/
 	g_signal_emit (context, signals[FINISHED], 0);
+	context->priv->invalidated = TRUE;
 }
 
 GtkTextView*
@@ -248,3 +256,19 @@ gtk_source_completion_context_get_proposals (GtkSourceCompletionContext		*contex
 	return g_hash_table_lookup (context->priv->proposals_table, provider);
 }
 
+void
+gtk_source_completion_context_set_iter (GtkSourceCompletionContext	*context,
+					GtkTextIter			*iter)
+{
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
+	context->priv->iter = *iter;
+	g_free (context->priv->criteria);
+        context->priv->criteria =
+                gtk_source_completion_utils_get_word (GTK_SOURCE_BUFFER (gtk_text_view_get_buffer (context->priv->view)));
+}
+
+gboolean
+gtk_source_completion_context_is_valid (GtkSourceCompletionContext	*context)
+{
+	return !context->priv->invalidated;
+}

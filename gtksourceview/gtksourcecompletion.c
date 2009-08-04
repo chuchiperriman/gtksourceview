@@ -166,6 +166,106 @@ get_iter_at_insert (GtkSourceCompletion *completion,
 	                                  gtk_text_buffer_get_insert (buffer));
 }
 
+static void
+context_proposals_added_cb (GtkSourceCompletionContext 	*context,
+			    GtkSourceCompletionProvider *provider,
+			    GList			*proposals,
+			    GtkSourceCompletion		*completion)
+{
+	/*TODO Add the proposals to the model*/
+	GList *item;
+	GtkSourceCompletionProposal *proposal;
+
+	if (completion->priv->filter_provider &&
+	    completion->priv->filter_provider != provider)
+	{
+		g_debug ("no filter");
+		return;
+	}
+		      
+	for (item = proposals; item; item = g_list_next (item))
+	{
+		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		{
+			//TODO Do this better
+			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+			gtk_source_completion_model_append (completion->priv->model_proposals,
+	                                                    provider,
+	                                                    proposal);
+			//TODO unref the proposal? I think not
+			g_object_unref (proposal);
+		}
+	}
+
+	g_debug ("readding");
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
+
+	g_list_free (proposals);
+}
+
+static void
+context_destroy (GtkSourceCompletion 	*completion)
+{
+
+	if (completion->priv->context)
+	{
+		g_signal_handlers_disconnect_by_func (completion->priv->context,
+						      context_proposals_added_cb,
+						      completion);
+		gtk_source_completion_context_finish (completion->priv->context);
+		g_object_unref(completion->priv->context);
+		completion->priv->context = NULL;
+	}
+}
+
+static void
+context_create (GtkSourceCompletion 	*completion,
+		GList 			*providers)
+{
+	/*Ensure there is not a completion active*/
+	context_destroy (completion);
+	
+	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
+								       providers);
+	g_signal_connect (completion->priv->context,
+				  "proposals-added",
+				  G_CALLBACK (context_proposals_added_cb),
+				  completion);
+}
+
+static void
+context_populate (GtkSourceCompletion	*completion,
+		  GList			*providers)
+{
+	GList *l;
+	GtkTextIter iter;
+	
+	if (completion->priv->context == NULL)
+	{
+		context_create (completion, providers);
+	}
+	else
+	{
+		/*Update the current criteria*/
+		get_iter_at_insert (completion, &iter);
+		gtk_source_completion_context_set_iter (completion->priv->context,
+							&iter);
+		providers = gtk_source_completion_context_get_providers (completion->priv->context);
+	}
+	
+	/* Make sure all providers are ours */
+	for (l = providers; l; l = g_list_next (l))
+	{
+		if (g_list_find (completion->priv->providers,
+		                 l->data) != NULL)
+		{
+			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),
+									    completion->priv->context);
+		}
+	}
+
+}
+
 static gboolean
 activate_current_proposal (GtkSourceCompletion *completion)
 {
@@ -1122,6 +1222,7 @@ buffer_delete_range_cb (GtkTextBuffer       *buffer,
 		{
 			//FIXME create the context, remove items, and add new ones
 			//refilter_proposals_with_word (completion);
+			context_populate (completion, NULL);
 		}
 	}
 	
@@ -1159,6 +1260,7 @@ buffer_insert_text_cb (GtkTextBuffer       *buffer,
 			//TODO update the context iter and criteria and call
 			//all providers to populate again
 			//refilter_proposals_with_word (completion);
+			context_populate (completion, NULL);
 		}
 	}
 }
@@ -1222,73 +1324,6 @@ connect_view (GtkSourceCompletion *completion)
 					"insert-text",
 					G_CALLBACK (buffer_insert_text_cb),
 					completion);
-}
-
-static void
-context_proposals_added_cb (GtkSourceCompletionContext 	*context,
-			    GtkSourceCompletionProvider *provider,
-			    GList			*proposals,
-			    GtkSourceCompletion		*completion)
-{
-	/*TODO Add the proposals to the model*/
-	GList *item;
-	GtkSourceCompletionProposal *proposal;
-
-	if (completion->priv->filter_provider &&
-	    completion->priv->filter_provider != provider)
-	{
-		g_debug ("no filter");
-		return;
-	}
-		      
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
-		{
-			//TODO Do this better
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-	                                                    provider,
-	                                                    proposal);
-			//TODO unref the proposal? I think not
-			g_object_unref (proposal);
-		}
-	}
-
-	g_debug ("readding");
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
-	g_list_free (proposals);
-}
-
-static void
-context_destroy (GtkSourceCompletion 	*completion)
-{
-
-	if (completion->priv->context)
-	{
-		g_signal_handlers_disconnect_by_func (completion->priv->context,
-						      context_proposals_added_cb,
-						      completion);
-		gtk_source_completion_context_finish (completion->priv->context);
-		g_object_unref(completion->priv->context);
-		completion->priv->context = NULL;
-	}
-}
-
-static void
-context_create (GtkSourceCompletion 	*completion,
-		GList 			*providers)
-{
-	/*Ensure there is not a completion active*/
-	context_destroy (completion);
-	
-	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
-								       providers);
-	g_signal_connect (completion->priv->context,
-				  "proposals-added",
-				  G_CALLBACK (context_proposals_added_cb),
-				  completion);
 }
 
 static void
@@ -2080,8 +2115,6 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
                             GList               *providers,
                             GtkTextIter         *place)
 {
-	GList *l;
-
 	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION (completion), FALSE);
 	
 	/* Make sure to clear any active completion */
@@ -2107,19 +2140,8 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 							  place);
 	}
 
-	context_create (completion, providers);
+	context_populate (completion, providers);
 	
-	/* Make sure all providers are ours */
-	for (l = providers; l; l = g_list_next (l))
-	{
-		if (g_list_find (completion->priv->providers,
-		                 l->data) != NULL)
-		{
-			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),
-									    completion->priv->context);
-		}
-	}
-
 	completion->priv->is_interactive = FALSE;
 
 	update_selection_label (completion);

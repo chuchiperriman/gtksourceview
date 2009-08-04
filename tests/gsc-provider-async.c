@@ -32,6 +32,7 @@ struct _GscProviderAsyncPrivate
 	GdkPixbuf 	*proposal_icon;
 	GThread		*th;
 	GtkSourceCompletionContext *context;
+	guint		nth;
 };
 
 G_DEFINE_TYPE_WITH_CODE (GscProviderAsync,
@@ -68,21 +69,26 @@ thread_add_proposals (GscProviderAsync *self)
 	guint num = 0;
 	GList *list = NULL;
 	gchar *name;
-	
-	while (num++ < 5 && self->priv->context)
+	GtkSourceCompletionContext *context = self->priv->context;
+	guint nth = self->priv->nth;
+
+	g_object_ref (context);
+	while (num++ < 5 && gtk_source_completion_context_is_valid (context))
 	{
 		g_debug ("thread");
 		list = NULL;
-		name = g_strdup_printf ("th-%i", num);
-		list = append_item (list, name, self->priv->proposal_icon, "Info proposal 1.1");
+		name = g_strdup_printf ("th%i-%i", nth, num);
+		list = append_item (list, name, self->priv->proposal_icon, name);
 		g_free (name);
-		name = g_strdup_printf ("thb-%i", num);
-		list = append_item (list, name, self->priv->proposal_icon, "Info proposal 1.2");
+		name = g_strdup_printf ("thb%i-%i", nth, num);
+		list = append_item (list, name, self->priv->proposal_icon, name);
 		g_free (name);
 
-		gtk_source_completion_context_add_proposals (self->priv->context, GTK_SOURCE_COMPLETION_PROVIDER (self), list);
+		gtk_source_completion_context_add_proposals (context, GTK_SOURCE_COMPLETION_PROVIDER (self), list);
 		g_usleep (2000000);
 	}
+	g_object_unref (context);
+	self->priv->th = NULL;
 	return NULL;
 }
 
@@ -90,9 +96,12 @@ static void
 context_finished (GtkSourceCompletionContext *context,
 		  GscProviderAsync *self)
 {
+	/*
 	g_debug ("con fini");
 	g_object_unref (self->priv->context);
+	g_debug ("unref");
 	self->priv->context = NULL;
+	*/
 }
 
 static void
@@ -102,8 +111,10 @@ gsc_provider_async_populate_completion (GtkSourceCompletionProvider *base,
 	//TODO If there is a context active, clear all
 	GscProviderAsync *self = GSC_PROVIDER_ASYNC (base);
 
+	g_debug ("populate async");
+
+	self->priv->nth++;
 	self->priv->context = context;
-	g_object_ref (self->priv->context);
 	self->priv->th = g_thread_create (thread_add_proposals,
 					  self,
 					  FALSE,
@@ -112,6 +123,7 @@ gsc_provider_async_populate_completion (GtkSourceCompletionProvider *base,
 			  "finished",
 			  context_finished,
 			  self);
+
 	//TODO Who frees the list?
 }
 
@@ -194,6 +206,7 @@ gsc_provider_async_init (GscProviderAsync * self)
 	                                                      GTK_ICON_LOOKUP_USE_BUILTIN,
 	                                                      NULL);
 	self->priv->th = NULL;
+	self->priv->nth = 0;
 }
 
 GscProviderAsync *

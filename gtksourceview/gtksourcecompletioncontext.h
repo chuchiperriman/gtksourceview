@@ -87,6 +87,11 @@ GList				*gtk_source_completion_context_get_proposals	(GtkSourceCompletionContex
 
 GList				*gtk_source_completion_context_get_providers	(GtkSourceCompletionContext 	*context);
 
+void				 gtk_source_completion_context_set_iter		(GtkSourceCompletionContext	*context,
+										 GtkTextIter			*iter);	
+
+gboolean			 gtk_source_completion_context_is_valid		(GtkSourceCompletionContext	*context);
+
 G_END_DECLS
 
 #endif
