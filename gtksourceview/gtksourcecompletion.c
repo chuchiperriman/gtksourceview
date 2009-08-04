@@ -228,9 +228,9 @@ context_create (GtkSourceCompletion 	*completion,
 	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
 								       providers);
 	g_signal_connect (completion->priv->context,
-				  "proposals-added",
-				  G_CALLBACK (context_proposals_added_cb),
-				  completion);
+			  "proposals-added",
+			  G_CALLBACK (context_proposals_added_cb),
+			  completion);
 }
 
 static void
@@ -238,7 +238,8 @@ context_populate (GtkSourceCompletion	*completion,
 		  GList			*providers)
 {
 	GList *l;
-	GtkTextIter iter;
+
+	gtk_source_completion_model_clear (completion->priv->model_proposals);
 	
 	if (completion->priv->context == NULL)
 	{
@@ -247,9 +248,7 @@ context_populate (GtkSourceCompletion	*completion,
 	else
 	{
 		/*Update the current criteria*/
-		get_iter_at_insert (completion, &iter);
-		gtk_source_completion_context_set_iter (completion->priv->context,
-							&iter);
+		gtk_source_completion_context_update (completion->priv->context);
 		providers = gtk_source_completion_context_get_providers (completion->priv->context);
 	}
 	
@@ -263,6 +262,8 @@ context_populate (GtkSourceCompletion	*completion,
 									    completion->priv->context);
 		}
 	}
+
+	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
 
 }
 

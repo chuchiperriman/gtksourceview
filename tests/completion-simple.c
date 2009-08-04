@@ -206,7 +206,8 @@ create_completion(void)
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
 
 	icon = get_icon_from_theme (GTK_STOCK_CLOSE);
-	prov_test1 = gsc_provider_async_new ("Async", icon);
+
+	/*prov_test1 = gsc_provider_async_new ("Async", icon);
 	if (icon != NULL)
 	{
 		g_object_unref (icon);
@@ -215,7 +216,7 @@ create_completion(void)
 	g_thread_init (NULL);
 	
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
-
+	*/
 #ifdef HAVE_DEVHELP
 	GscProviderDevhelp *prov_devhelp;
 

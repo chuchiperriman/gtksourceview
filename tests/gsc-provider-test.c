@@ -52,12 +52,17 @@ gsc_provider_test_get_icon (GtkSourceCompletionProvider *self)
 
 
 static GList *
-append_item (GList *list, const gchar *name, GdkPixbuf *icon, const gchar *info)
+append_item (GList *list, const gchar *name, GdkPixbuf *icon, const gchar *info,
+	     const gchar *criteria)
 {
 	GtkSourceCompletionItem *prop;
-	
-	prop = gtk_source_completion_item_new (name, name, icon, info);
-	return g_list_append (list, prop);
+
+	if (g_str_has_prefix (name, criteria))
+	{
+		prop = gtk_source_completion_item_new (name, name, icon, info);
+		return g_list_append (list, prop);
+	}
+	return list;
 }
 
 static void
@@ -66,13 +71,15 @@ gsc_provider_test_populate_completion (GtkSourceCompletionProvider *base,
 {
 	GscProviderTest *provider = GSC_PROVIDER_TEST (base);
 	GList *list = NULL;
-	
-	list = append_item (list, "aa", provider->priv->proposal_icon, "Info proposal 1.1");
-	list = append_item (list, "ab", provider->priv->proposal_icon, "Info proposal 1.2");
-	list = append_item (list, "bc", provider->priv->proposal_icon, "Info proposal 1.3");
-	list = append_item (list, "bd", provider->priv->proposal_icon, "Info proposal 1.3");
+	gchar *criteria = gtk_source_completion_context_get_criteria (context);
 
-	gtk_source_completion_context_add_proposals (context, base, list);
+	list = append_item (list, "aa", provider->priv->proposal_icon, "Info proposal 1.1", criteria);
+	list = append_item (list, "ab", provider->priv->proposal_icon, "Info proposal 1.2", criteria);
+	list = append_item (list, "bc", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
+	list = append_item (list, "bd", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
+
+	if (list != NULL)
+		gtk_source_completion_context_add_proposals (context, base, list);
 
 	//TODO Who frees the list?
 

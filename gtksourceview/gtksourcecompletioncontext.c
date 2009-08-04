@@ -63,6 +63,22 @@ free_table_entry (GtkSourceCompletionProvider *provider,
 }
 
 static void
+clear_table_entry (GtkSourceCompletionProvider *provider,
+		   GList *proposals,
+		   GtkSourceCompletionContext *context)
+{
+	g_list_foreach (proposals, (GFunc)g_object_unref, NULL);
+	g_list_free (proposals);
+	g_hash_table_insert (context->priv->proposals_table, provider, NULL);
+}
+
+static void
+context_clear (GtkSourceCompletionContext	*context)
+{
+	g_hash_table_foreach (context->priv->proposals_table, (GHFunc)clear_table_entry, context);
+}
+
+static void
 gtk_source_completion_context_class_init (GtkSourceCompletionContextClass *klass)
 {
 	GObjectClass *gobject_class = (GObjectClass *)klass;
@@ -119,27 +135,35 @@ gtk_source_completion_context_finalize (GObject *object)
 
 	g_hash_table_foreach (self->priv->proposals_table, (GHFunc)free_table_entry, self);
 	g_hash_table_destroy (self->priv->proposals_table);
-	
+
 	g_signal_handlers_destroy (object);
 	G_OBJECT_CLASS (gtk_source_completion_context_parent_class)->finalize (object);
+}
+
+static void
+update_criteria (GtkSourceCompletionContext	*context)
+{
+	GtkTextBuffer 	*buffer;
+
+	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (context->priv->view));
+	gtk_text_buffer_get_iter_at_mark (buffer,
+	                                  &(context->priv->iter),
+	                                  gtk_text_buffer_get_insert (buffer));
+	
+	g_free (context->priv->criteria);
+        context->priv->criteria =
+                gtk_source_completion_utils_get_word (GTK_SOURCE_BUFFER (gtk_text_view_get_buffer (context->priv->view)));
 }
 
 GtkSourceCompletionContext*
 gtk_source_completion_context_new (GtkTextView	*view,
 				   GList *providers)
 {
-	GtkTextBuffer 	*buffer;
-	GtkTextIter	iter;
 	GtkSourceCompletionContext *context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
 
-	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
-	gtk_text_buffer_get_iter_at_mark (buffer,
-	                                  &iter,
-	                                  gtk_text_buffer_get_insert (buffer));
-	
 	context->priv->view = view;
 	context->priv->providers = g_list_copy (providers);
-	gtk_source_completion_context_set_iter (context, &iter);
+	update_criteria (context);
 	return context;
 }
 
@@ -256,19 +280,17 @@ gtk_source_completion_context_get_proposals (GtkSourceCompletionContext		*contex
 	return g_hash_table_lookup (context->priv->proposals_table, provider);
 }
 
-void
-gtk_source_completion_context_set_iter (GtkSourceCompletionContext	*context,
-					GtkTextIter			*iter)
-{
-	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
-	context->priv->iter = *iter;
-	g_free (context->priv->criteria);
-        context->priv->criteria =
-                gtk_source_completion_utils_get_word (GTK_SOURCE_BUFFER (gtk_text_view_get_buffer (context->priv->view)));
-}
-
 gboolean
 gtk_source_completion_context_is_valid (GtkSourceCompletionContext	*context)
 {
 	return !context->priv->invalidated;
+}
+
+void
+gtk_source_completion_context_update (GtkSourceCompletionContext	*context)
+{
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
+	//TODO Clear the current proposals
+	context_clear (context);
+	update_criteria (context);
 }
