@@ -51,7 +51,7 @@ typedef struct _GtkSourceCompletionContextPrivate GtkSourceCompletionContextPriv
 typedef struct _GtkSourceCompletionContext      GtkSourceCompletionContext;
 typedef struct _GtkSourceCompletionContextClass GtkSourceCompletionContextClass;
 
-#include <gtksourceview/gtksourcecompletionprovider.h>
+#include "gtksourcecompletionmodel.h"
 
 struct _GtkSourceCompletionContextClass
 {
@@ -66,8 +66,9 @@ struct _GtkSourceCompletionContext
 
 GType	 			 gtk_source_completion_context_get_type		(void) G_GNUC_CONST;
 
-GtkSourceCompletionContext	*gtk_source_completion_context_new		(GtkTextView	*view,
-										 GList		*providers);
+GtkSourceCompletionContext	*gtk_source_completion_context_new		(GtkSourceCompletionModel	*model,
+										 GtkTextView			*view,
+										 GList				*providers);
 
 void				 gtk_source_completion_context_add_proposals	(GtkSourceCompletionContext	*context,
 										 GtkSourceCompletionProvider	*provider,
@@ -78,7 +79,7 @@ void				 gtk_source_completion_context_finish		(GtkSourceCompletionContext	*cont
 GtkTextView			*gtk_source_completion_context_get_view		(GtkSourceCompletionContext	*context);
 
 void				 gtk_source_completion_context_get_iter		(GtkSourceCompletionContext	*context,
-										 GtkTextIter *iter);
+										 GtkTextIter 			*iter);
 
 gchar				*gtk_source_completion_context_get_criteria	(GtkSourceCompletionContext	*context);
 
@@ -90,6 +91,9 @@ GList				*gtk_source_completion_context_get_providers	(GtkSourceCompletionContex
 gboolean			 gtk_source_completion_context_is_valid		(GtkSourceCompletionContext	*context);
 
 void				 gtk_source_completion_context_update		(GtkSourceCompletionContext	*context);
+
+void				 gtk_source_completion_context_set_filter_provider(GtkSourceCompletionContext	*context,
+										   GtkSourceCompletionProvider	*provider);
 
 G_END_DECLS
 

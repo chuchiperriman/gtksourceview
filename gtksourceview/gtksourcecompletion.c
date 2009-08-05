@@ -167,51 +167,11 @@ get_iter_at_insert (GtkSourceCompletion *completion,
 }
 
 static void
-context_proposals_added_cb (GtkSourceCompletionContext 	*context,
-			    GtkSourceCompletionProvider *provider,
-			    GList			*proposals,
-			    GtkSourceCompletion		*completion)
-{
-	/*TODO Add the proposals to the model*/
-	GList *item;
-	GtkSourceCompletionProposal *proposal;
-
-	if (completion->priv->filter_provider &&
-	    completion->priv->filter_provider != provider)
-	{
-		g_debug ("no filter");
-		return;
-	}
-		      
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
-		{
-			//TODO Do this better
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-	                                                    provider,
-	                                                    proposal);
-			//TODO unref the proposal? I think not
-			g_object_unref (proposal);
-		}
-	}
-
-	g_debug ("readding");
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
-	g_list_free (proposals);
-}
-
-static void
 context_destroy (GtkSourceCompletion 	*completion)
 {
 
 	if (completion->priv->context)
 	{
-		g_signal_handlers_disconnect_by_func (completion->priv->context,
-						      context_proposals_added_cb,
-						      completion);
 		gtk_source_completion_context_finish (completion->priv->context);
 		g_object_unref(completion->priv->context);
 		completion->priv->context = NULL;
@@ -225,12 +185,9 @@ context_create (GtkSourceCompletion 	*completion,
 	/*Ensure there is not a completion active*/
 	context_destroy (completion);
 	
-	completion->priv->context = gtk_source_completion_context_new (GTK_TEXT_VIEW (completion->priv->view),
+	completion->priv->context = gtk_source_completion_context_new (completion->priv->model_proposals,
+								       GTK_TEXT_VIEW (completion->priv->view),
 								       providers);
-	g_signal_connect (completion->priv->context,
-			  "proposals-added",
-			  G_CALLBACK (context_proposals_added_cb),
-			  completion);
 }
 
 static void
@@ -239,8 +196,6 @@ context_populate (GtkSourceCompletion	*completion,
 {
 	GList *l;
 
-	gtk_source_completion_model_clear (completion->priv->model_proposals);
-	
 	if (completion->priv->context == NULL)
 	{
 		context_create (completion, providers);
@@ -262,9 +217,6 @@ context_populate (GtkSourceCompletion	*completion,
 									    completion->priv->context);
 		}
 	}
-
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-
 }
 
 static gboolean
@@ -633,7 +585,6 @@ select_provider (GtkSourceCompletion *completion,
                  ListSelector         cycle_last)
 {
 	GList *providers;
-	GList *proposals;
 	GList *first;
 	GList *last;
 	GList *orig;
@@ -729,37 +680,8 @@ select_provider (GtkSourceCompletion *completion,
 	
 	update_selection_label (completion);
 	//TODO do_refilter (completion, FALSE);
-
-	/*******************TODO Testing*****************/
-	gtk_source_completion_model_clear (completion->priv->model_proposals);
-	
-	if (completion->priv->filter_provider != NULL)
-	{
-		first = g_list_append (NULL, completion->priv->filter_provider);
-	}
-	else
-	{
-		first = g_list_copy (providers);
-	}
-
-	for (current = first; current != NULL; current = g_list_next (current))
-	{
-		provider = GTK_SOURCE_COMPLETION_PROVIDER (current->data);
-		proposals = gtk_source_completion_context_get_proposals (completion->priv->context,
-									 provider);
-			
-		for (;proposals != NULL; proposals = g_list_next (proposals))
-		{
-			gtk_source_completion_model_append (completion->priv->model_proposals,
-							    provider,
-							    GTK_SOURCE_COMPLETION_PROPOSAL (proposals->data));
-		}
-	}
-
-	g_list_free (first);
-	
-	gtk_source_completion_model_run_add_proposals (completion->priv->model_proposals);
-	/****************************************/
+	gtk_source_completion_context_set_filter_provider (completion->priv->context,
+							   completion->priv->filter_provider);
 	
 	return TRUE;
 }

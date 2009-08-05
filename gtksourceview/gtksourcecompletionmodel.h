@@ -24,7 +24,6 @@
 #define __GTK_SOURCE_COMPLETION_MODEL_H__
 
 #include <gtk/gtk.h>
-#include <gtksourceview/gtksourcecompletionprovider.h>
 #include <gtksourceview/gtksourcecompletionproposal.h>
 
 G_BEGIN_DECLS
@@ -40,6 +39,8 @@ G_BEGIN_DECLS
 typedef struct _GtkSourceCompletionModel	GtkSourceCompletionModel;
 typedef struct _GtkSourceCompletionModelClass	GtkSourceCompletionModelClass;
 typedef struct _GtkSourceCompletionModelPrivate	GtkSourceCompletionModelPrivate;
+
+#include <gtksourceview/gtksourcecompletionprovider.h>
 
 struct _GtkSourceCompletionModel {
 	GObject parent;

@@ -33,19 +33,20 @@ static void gtk_source_completion_context_finalize (GObject *object);
 /* Signals */
 enum
 {
-	PROPOSALS_ADDED,
 	FINISHED,
 	LAST_SIGNAL
 };
 
 struct _GtkSourceCompletionContextPrivate
 {
-	GtkTextView	*view;
-	GtkTextIter 	iter;
-	gchar 		*criteria;
-	GList		*providers;
-	GHashTable	*proposals_table;
-	gboolean	invalidated;
+	GtkSourceCompletionModel 	*model;
+	GtkTextView			*view;
+	GtkTextIter 			 iter;
+	gchar 				*criteria;
+	GList				*providers;
+	GHashTable			*proposals_table;
+	gboolean			 invalidated;
+	GtkSourceCompletionProvider	*filter_provider;
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -87,18 +88,6 @@ gtk_source_completion_context_class_init (GtkSourceCompletionContextClass *klass
 
 	gobject_class->finalize = gtk_source_completion_context_finalize;
 
-	signals[PROPOSALS_ADDED] =
-		g_signal_new ("proposals-added",
-			      G_TYPE_FROM_CLASS (klass),
-			      G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
-			      0,
-			      NULL, 
-			      NULL,
-			      _gtksourceview_marshal_VOID__OBJECT_POINTER, 
-			      G_TYPE_NONE,
-			      2,
-			      G_TYPE_OBJECT,
-			      G_TYPE_POINTER);
 	signals[FINISHED] =
 		g_signal_new ("finished",
 			      G_TYPE_FROM_CLASS (klass),
@@ -120,6 +109,7 @@ gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 							g_direct_equal);
 	self->priv->criteria = NULL;
 	self->priv->invalidated = FALSE;
+	self->priv->filter_provider = NULL;
 
 	g_debug ("context init");
 }
@@ -156,11 +146,13 @@ update_criteria (GtkSourceCompletionContext	*context)
 }
 
 GtkSourceCompletionContext*
-gtk_source_completion_context_new (GtkTextView	*view,
-				   GList *providers)
+gtk_source_completion_context_new (GtkSourceCompletionModel	*model,
+				   GtkTextView			*view,
+				   GList 			*providers)
 {
 	GtkSourceCompletionContext *context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
 
+	context->priv->model = model;
 	context->priv->view = view;
 	context->priv->providers = g_list_copy (providers);
 	update_criteria (context);
@@ -173,6 +165,8 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 					     GList	 			*proposals)
 {
 	GList *cached;
+	GList *item;
+	GtkSourceCompletionProposal *proposal;
 
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
@@ -196,8 +190,20 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 	}
 
 	g_hash_table_insert (context->priv->proposals_table, provider, cached);
-	
-	g_signal_emit_by_name (context, "proposals-added", provider, proposals);
+
+	for (item = proposals; item; item = g_list_next (item))
+	{
+		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		{
+			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+			gtk_source_completion_model_append (context->priv->model,
+	                                                    provider,
+	                                                    proposal);
+		}
+	}
+	gtk_source_completion_model_run_add_proposals (context->priv->model);
+
+	g_list_free (proposals);
 }
 
 void
@@ -291,6 +297,59 @@ gtk_source_completion_context_update (GtkSourceCompletionContext	*context)
 {
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
 	//TODO Clear the current proposals
+	gtk_source_completion_model_clear (context->priv->model);
 	context_clear (context);
 	update_criteria (context);
+}
+
+void
+gtk_source_completion_context_set_filter_provider (GtkSourceCompletionContext	*context,
+						   GtkSourceCompletionProvider	*provider)
+{
+	GList *proposals;
+	GList *providers;
+	GList *current;
+	
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
+	//TODO Check if the provider is in the list of providers
+
+	if (context->priv->filter_provider == provider)
+		return;
+
+	gtk_source_completion_model_clear (context->priv->model);
+	
+	context->priv->filter_provider = provider;
+
+	if (provider != NULL)
+	{
+		providers = g_list_append (NULL, provider);
+	}
+	else
+	{
+		providers = g_list_copy (context->priv->providers);
+	}
+
+	for (current = providers; current != NULL; current = g_list_next (current))
+	{
+		provider = GTK_SOURCE_COMPLETION_PROVIDER (current->data);
+		proposals = gtk_source_completion_context_get_proposals (context,
+									 provider);
+			
+		for (;proposals != NULL; proposals = g_list_next (proposals))
+		{
+			gtk_source_completion_model_append (context->priv->model,
+							    provider,
+							    GTK_SOURCE_COMPLETION_PROPOSAL (proposals->data));
+		}
+	}
+
+	g_list_free (providers);
+
+	/*TODO Hide the completion if it is empty
+	if (gtk_source_completion_model_is_empty (completion->priv->model_proposals, FALSE))
+	{
+	}
+	*/
+	      
+	gtk_source_completion_model_run_add_proposals (context->priv->model);
 }
