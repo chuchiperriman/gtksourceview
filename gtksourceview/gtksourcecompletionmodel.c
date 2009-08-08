@@ -22,7 +22,7 @@
 
 #include "gtksourcecompletionmodel.h"
 
-#define ITEMS_PER_CALLBACK 500
+#define ITEMS_PER_CALLBACK 100
 
 #define GTK_SOURCE_COMPLETION_MODEL_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE((object), GTK_TYPE_SOURCE_COMPLETION_MODEL, GtkSourceCompletionModelPrivate))
 
@@ -653,7 +653,9 @@ append_list (GtkSourceCompletionModel *model,
 		
 		if (info)
 			g_hash_table_insert (info->hash, node, item);
+		
 		*inserted = TRUE;
+		model->priv->last = item;
 	}
 	else
 	{
@@ -662,8 +664,6 @@ append_list (GtkSourceCompletionModel *model,
 		item->data = node;*/
 		*inserted = FALSE;
 	}
-	
-	model->priv->last = item;
 	
 	return item;
 }
@@ -693,6 +693,8 @@ idle_append (gpointer data)
 	GtkTreePath *path;
 	GList *item;
 	gint i = 0;
+
+	g_debug ("ini idle_append");
 	
 	while (i < ITEMS_PER_CALLBACK)
 	{
@@ -757,6 +759,8 @@ idle_append (gpointer data)
 	
 		i++;
 	}
+
+	g_debug ("fin idle_append");
 	
 	return TRUE;
 }
@@ -764,6 +768,7 @@ idle_append (gpointer data)
 void
 gtk_source_completion_model_run_add_proposals (GtkSourceCompletionModel *model)
 {
+	g_debug ("run_add");
 	if (idle_append (model))
 	{
 		model->priv->idle_id =
@@ -800,6 +805,8 @@ gtk_source_completion_model_clear (GtkSourceCompletionModel *model)
 	GList *list;
 	
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
+
+	g_debug ("clear model");
 	
 	/* Clear the queue of missing elements to append */
 	cancel_append (model);

@@ -170,10 +170,10 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
-	g_return_if_fail (proposals != NULL);
 	g_return_if_fail (!context->priv->invalidated);
 
 	//TODO Check if the provider is in the providers list
+	//TODO if proposals == NULL we must clear all proposals for this provider
 
 	g_list_foreach (proposals, (GFunc)g_object_ref, NULL);
 

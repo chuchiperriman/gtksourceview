@@ -183,7 +183,8 @@ create_completion(void)
 	GdkPixbuf *icon;
 	
 	comp = gtk_source_view_get_completion (GTK_SOURCE_VIEW (view));
-	
+
+
 	icon = get_icon_from_theme (GTK_STOCK_NETWORK);
 
 	prov_test1 = gsc_provider_test_new ("Networking", icon);
@@ -207,7 +208,8 @@ create_completion(void)
 
 	icon = get_icon_from_theme (GTK_STOCK_CLOSE);
 
-	/*prov_test1 = gsc_provider_async_new ("Async", icon);
+	/*
+	prov_test1 = gsc_provider_async_new ("Async", icon);
 	if (icon != NULL)
 	{
 		g_object_unref (icon);
@@ -217,9 +219,10 @@ create_completion(void)
 	
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
 	*/
+	
 #ifdef HAVE_DEVHELP
+	g_debug ("Devhelp provider enabled");
 	GscProviderDevhelp *prov_devhelp;
-
 	prov_devhelp = gsc_provider_devhelp_new ();
 	
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_devhelp), NULL);

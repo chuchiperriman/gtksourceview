@@ -13,6 +13,9 @@ struct _GscProviderDevhelpPrivate
 	GtkWidget *view;
 
 	GList *proposals;
+
+	GtkSourceCompletionContext *context;
+	GList *current_list;
 };
 
 static void gsc_provider_devhelp_iface_init (GtkSourceCompletionProviderIface *iface);
@@ -29,17 +32,39 @@ gsc_provider_devhelp_get_name (GtkSourceCompletionProvider *self)
 	return "Devhelp";
 }
 
-static GList * 
-gsc_provider_devhelp_get_proposals (GtkSourceCompletionProvider *provider,
-                                    GtkTextIter                 *iter)
+static void
+add_proposal (GtkSourceCompletionProposal	*proposal,
+	      GscProviderDevhelp		*self)
 {
-	GscProviderDevhelp *devhelp = GSC_PROVIDER_DEVHELP (provider);
+	const gchar *item;
+	gchar *criteria;
 	
-	g_list_foreach (devhelp->priv->proposals, (GFunc)g_object_ref, NULL);
-
-	return g_list_copy (devhelp->priv->proposals);
+	item = gtk_source_completion_proposal_get_label (proposal);
+	criteria = gtk_source_completion_context_get_criteria (self->priv->context);
+	if (g_str_has_prefix (item, criteria))
+	{
+		self->priv->current_list = g_list_prepend (self->priv->current_list, g_object_ref (proposal));
+	}
 }
 
+static void
+gsc_provider_devhelp_populate_completion (GtkSourceCompletionProvider	*provider,
+					  GtkSourceCompletionContext	*context)
+{
+	GscProviderDevhelp *devhelp = GSC_PROVIDER_DEVHELP (provider);
+
+	/*
+	g_list_foreach (devhelp->priv->proposals, (GFunc)g_object_ref, NULL);
+	g_list_copy (devhelp->priv->proposals);
+	*/
+	devhelp->priv->context = context;
+	g_list_foreach (devhelp->priv->proposals, (GFunc)add_proposal, devhelp);
+
+	gtk_source_completion_context_add_proposals (context, provider, devhelp->priv->current_list);
+	devhelp->priv->current_list = NULL;
+}
+
+/*
 static gboolean
 gsc_provider_devhelp_filter_proposal (GtkSourceCompletionProvider *provider,
                                       GtkSourceCompletionProposal *proposal,
@@ -51,6 +76,8 @@ gsc_provider_devhelp_filter_proposal (GtkSourceCompletionProvider *provider,
 	item = gtk_source_completion_proposal_get_label (proposal);
 	return g_str_has_prefix (item, criteria);
 }
+
+*/
 
 static const gchar *
 gsc_provider_devhelp_get_capabilities(GtkSourceCompletionProvider *provider)
@@ -83,9 +110,8 @@ static void
 gsc_provider_devhelp_iface_init (GtkSourceCompletionProviderIface *iface)
 {
 	iface->get_name = gsc_provider_devhelp_get_name;
-	iface->get_proposals = gsc_provider_devhelp_get_proposals;
+	iface->populate_completion = gsc_provider_devhelp_populate_completion;
 	iface->get_capabilities = gsc_provider_devhelp_get_capabilities;
-	iface->filter_proposal = gsc_provider_devhelp_filter_proposal;
 	
 	iface->get_info_widget = gsc_provider_devhelp_get_info_widget;
 	iface->update_info = gsc_provider_devhelp_update_info;
@@ -141,6 +167,8 @@ gsc_provider_devhelp_init (GscProviderDevhelp *self)
 	gtk_widget_set_size_request (self->priv->view, 400, 300);
 
 	self->priv->proposals = g_list_reverse (ret);
+
+	g_debug ("Num devhelp proposals: %i", g_list_length (self->priv->proposals));
 }
 
 GscProviderDevhelp*
