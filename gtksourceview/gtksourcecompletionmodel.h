@@ -98,6 +98,8 @@ gboolean 	gtk_source_completion_model_iter_previous (GtkSourceCompletionModel   
 gboolean 	gtk_source_completion_model_iter_last 	(GtkSourceCompletionModel           *model,
 							 GtkTreeIter                        *iter);
 
+void		gtk_source_completion_model_update	(GtkSourceCompletionModel	    *model);
+
 G_END_DECLS
 
 #endif /* __GTK_SOURCE_COMPLETION_MODEL_H__ */

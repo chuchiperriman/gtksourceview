@@ -589,6 +589,7 @@ select_provider (GtkSourceCompletion *completion,
 	GList *last;
 	GList *orig;
 	GList *current;
+	GList *proposals;
 	GtkSourceCompletionProvider *provider;
 	guint num;
 	guint pos;
@@ -649,14 +650,11 @@ select_provider (GtkSourceCompletion *completion,
 		if (current != NULL)
 		{
 			provider = GTK_SOURCE_COMPLETION_PROVIDER (current->data);
-
-			break;
-			//TODO reenable this check using the context
-			if (gtk_source_completion_model_n_proposals (completion->priv->model_proposals,
-			                                             provider) != 0)
-			{
+			proposals = gtk_source_completion_context_get_proposals (completion->priv->context,
+										 provider);
+			/*We don't select the provider if it has not proposals*/
+			if (proposals != NULL)
 				break;
-			}
 		}
 		else if (!gtk_source_completion_model_is_empty (completion->priv->model_proposals, TRUE))
 		{

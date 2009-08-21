@@ -41,6 +41,7 @@ typedef struct
 	GList *item;
 	GHashTable *hash;
 	guint num;
+	gboolean needs_update;
 } HeaderInfo;
 
 struct _GtkSourceCompletionModelPrivate
@@ -718,6 +719,7 @@ idle_append (gpointer data)
 		
 		if (info == NULL)
 		{
+			g_debug ("creating header");
 			/*header = g_slice_new (ProposalNode);
 			header->provider = g_object_ref (node->provider);
 			header->proposal = NULL;
@@ -725,6 +727,7 @@ idle_append (gpointer data)
 			append_list (model, NULL, header, &inserted);*/
 			
 			info = g_slice_new (HeaderInfo);
+			info->needs_update = FALSE;
 			info->item = model->priv->last;
 			info->num = 0;
 			info->hash = g_hash_table_new (hash_node,
@@ -795,6 +798,26 @@ gtk_source_completion_model_append (GtkSourceCompletionModel    *model,
 	node->changed_id = 0;
 	
 	g_queue_push_tail (model->priv->item_queue, node);
+}
+
+static void
+set_provider_needs_update (GtkSourceCompletionProvider	*provider,
+			   HeaderInfo			*info,
+			   GtkSourceCompletionModel	*model)
+{
+	if (info)
+		info->needs_update = TRUE;
+
+}
+
+void
+gtk_source_completion_model_update (GtkSourceCompletionModel    *model)
+{
+	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
+
+	/*Clear the queue because the model will be updated*/
+	cancel_append (model);
+	g_hash_table_foreach (model->priv->num_per_provider, (GHFunc)set_provider_needs_update, model);
 }
 
 void

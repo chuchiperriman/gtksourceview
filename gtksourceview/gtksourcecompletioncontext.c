@@ -37,14 +37,20 @@ enum
 	LAST_SIGNAL
 };
 
+typedef struct
+{
+	GtkSourceCompletionProvider 	*provider;
+	GList				*proposals;
+	gboolean			 needs_update;
+}ProviderInfo;
+
 struct _GtkSourceCompletionContextPrivate
 {
 	GtkSourceCompletionModel 	*model;
 	GtkTextView			*view;
 	GtkTextIter 			 iter;
 	gchar 				*criteria;
-	GList				*providers;
-	GHashTable			*proposals_table;
+	GHashTable			*pinfo_table;
 	gboolean			 invalidated;
 	GtkSourceCompletionProvider	*filter_provider;
 };
@@ -54,29 +60,35 @@ static guint signals[LAST_SIGNAL] = { 0 };
 G_DEFINE_TYPE (GtkSourceCompletionContext, gtk_source_completion_context, G_TYPE_OBJECT);
 
 static void
-free_table_entry (GtkSourceCompletionProvider *provider,
-		  GList *proposals,
-		  GtkSourceCompletionContext *context)
+free_proposals_list (GList *list)
 {
-	g_object_unref (provider);
-	g_list_foreach (proposals, (GFunc)g_object_unref, NULL);
-	g_list_free (proposals);
+	g_list_foreach (list, (GFunc)g_object_unref, NULL);
+	g_list_free (list);
 }
 
 static void
 clear_table_entry (GtkSourceCompletionProvider *provider,
-		   GList *proposals,
+		   ProviderInfo *pinfo,
 		   GtkSourceCompletionContext *context)
 {
-	g_list_foreach (proposals, (GFunc)g_object_unref, NULL);
-	g_list_free (proposals);
-	g_hash_table_insert (context->priv->proposals_table, provider, NULL);
+	free_proposals_list (pinfo->proposals);
+	pinfo->proposals = NULL;
+}
+
+static void
+free_table_entry (GtkSourceCompletionProvider *provider,
+		  ProviderInfo *pinfo,
+		  GtkSourceCompletionContext *context)
+{
+	clear_table_entry (provider, pinfo, context);
+	g_object_unref (pinfo->provider);
+	g_slice_free (ProviderInfo, pinfo);
 }
 
 static void
 context_clear (GtkSourceCompletionContext	*context)
 {
-	g_hash_table_foreach (context->priv->proposals_table, (GHFunc)clear_table_entry, context);
+	g_hash_table_foreach (context->priv->pinfo_table, (GHFunc)clear_table_entry, context);
 }
 
 static void
@@ -105,8 +117,8 @@ gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 {
 	self->priv = GTK_SOURCE_COMPLETION_CONTEXT_GET_PRIVATE (self);
 	
-	self->priv->proposals_table = g_hash_table_new (g_direct_hash,
-							g_direct_equal);
+	self->priv->pinfo_table = g_hash_table_new (g_direct_hash,
+						    g_direct_equal);
 	self->priv->criteria = NULL;
 	self->priv->invalidated = FALSE;
 	self->priv->filter_provider = NULL;
@@ -123,8 +135,8 @@ gtk_source_completion_context_finalize (GObject *object)
 	
 	g_free (self->priv->criteria);
 
-	g_hash_table_foreach (self->priv->proposals_table, (GHFunc)free_table_entry, self);
-	g_hash_table_destroy (self->priv->proposals_table);
+	g_hash_table_foreach (self->priv->pinfo_table, (GHFunc)free_table_entry, self);
+	g_hash_table_destroy (self->priv->pinfo_table);
 
 	g_signal_handlers_destroy (object);
 	G_OBJECT_CLASS (gtk_source_completion_context_parent_class)->finalize (object);
@@ -150,11 +162,25 @@ gtk_source_completion_context_new (GtkSourceCompletionModel	*model,
 				   GtkTextView			*view,
 				   GList 			*providers)
 {
-	GtkSourceCompletionContext *context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
+	GList *l;
+	GtkSourceCompletionContext *context;
+	ProviderInfo *pinfo;
 
+	g_return_val_if_fail (providers != NULL, NULL);
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model), NULL);
+	g_return_val_if_fail (GTK_IS_TEXT_VIEW (view), NULL);
+	
+	context = g_object_new (GTK_TYPE_SOURCE_COMPLETION_CONTEXT, NULL);
 	context->priv->model = model;
 	context->priv->view = view;
-	context->priv->providers = g_list_copy (providers);
+	for (l = providers; l != NULL; l = g_list_next (l))
+	{
+		pinfo = g_slice_new (ProviderInfo);
+		pinfo->provider = (GtkSourceCompletionProvider*)g_object_ref(l->data);
+		pinfo->proposals = NULL;
+		pinfo->needs_update = FALSE;
+		g_hash_table_insert (context->priv->pinfo_table, pinfo->provider, pinfo);
+	}
 	update_criteria (context);
 	return context;
 }
@@ -164,7 +190,7 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 					     GtkSourceCompletionProvider	*provider,
 					     GList	 			*proposals)
 {
-	GList *cached;
+	ProviderInfo *pinfo;
 	GList *item;
 	GtkSourceCompletionProposal *proposal;
 
@@ -177,19 +203,25 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 
 	g_list_foreach (proposals, (GFunc)g_object_ref, NULL);
 
-	cached = g_hash_table_lookup (context->priv->proposals_table, provider);
+	pinfo = (ProviderInfo*)g_hash_table_lookup (context->priv->pinfo_table, provider);
 
-	if (cached != NULL)
+	if (pinfo->needs_update)
 	{
-		cached = g_list_concat (cached, g_list_copy (proposals));
+		free_proposals_list (pinfo->proposals);
+		pinfo->proposals = NULL;
+		pinfo->needs_update = FALSE;
+		//TODO Set the current proposals in the model (the model will
+		//remove the old proposals and will add the new ones)
+	}
+	
+	if (pinfo->proposals != NULL)
+	{
+		pinfo->proposals = g_list_concat (pinfo->proposals, g_list_copy (proposals));
 	}
 	else
 	{
-		g_object_ref (provider);
-		cached = g_list_copy (proposals);
+		pinfo->proposals = g_list_copy (proposals);
 	}
-
-	g_hash_table_insert (context->priv->proposals_table, provider, cached);
 
 	for (item = proposals; item; item = g_list_next (item))
 	{
@@ -256,15 +288,14 @@ gtk_source_completion_context_get_criteria (GtkSourceCompletionContext	*context)
  *
  * 
  *
- * Returns: The internal list of providers for this context
+ * Returns: The content of the list is owned by the context and should not be
+ * modified or freed. Use g_list_free() when done using the list.
  **/
 GList*
 gtk_source_completion_context_get_providers (GtkSourceCompletionContext *context)
 {
-
 	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context), NULL);
-	
-	return context->priv->providers;
+	return g_hash_table_get_keys (context->priv->pinfo_table);
 }
 
 /**
@@ -280,10 +311,13 @@ GList*
 gtk_source_completion_context_get_proposals (GtkSourceCompletionContext		*context,
 					     GtkSourceCompletionProvider	*provider)
 {
+	ProviderInfo *pinfo;
 	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context), NULL);
 	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider), NULL);
 	
-	return g_hash_table_lookup (context->priv->proposals_table, provider);
+	pinfo = (ProviderInfo*)g_hash_table_lookup (context->priv->pinfo_table, provider);
+
+	return pinfo->proposals;
 }
 
 gboolean
@@ -295,9 +329,21 @@ gtk_source_completion_context_is_valid (GtkSourceCompletionContext	*context)
 void
 gtk_source_completion_context_update (GtkSourceCompletionContext	*context)
 {
+	ProviderInfo *pinfo;
+	GList *pinfo_list;
+	GList *l;
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
-	//TODO Clear the current proposals
-	gtk_source_completion_model_clear (context->priv->model);
+	//TODO we will remove this clear and the model will be updated on the fly
+	//gtk_source_completion_model_clear (context->priv->model);
+
+	pinfo_list = g_hash_table_get_values (context->priv->pinfo_table);
+	for (l = pinfo_list; l != NULL; l = g_list_next (l))
+	{
+		pinfo = (ProviderInfo*)l->data;
+		pinfo->needs_update = TRUE;
+	}
+	g_list_free (pinfo_list);
+	
 	context_clear (context);
 	update_criteria (context);
 }
@@ -326,7 +372,7 @@ gtk_source_completion_context_set_filter_provider (GtkSourceCompletionContext	*c
 	}
 	else
 	{
-		providers = g_list_copy (context->priv->providers);
+		providers = gtk_source_completion_context_get_providers(context);
 	}
 
 	for (current = providers; current != NULL; current = g_list_next (current))
