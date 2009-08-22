@@ -73,13 +73,12 @@ gsc_provider_test_populate_completion (GtkSourceCompletionProvider *base,
 	GList *list = NULL;
 	gchar *criteria = gtk_source_completion_context_get_criteria (context);
 
-	list = append_item (list, "aa", provider->priv->proposal_icon, "Info proposal 1.1", criteria);
-	list = append_item (list, "ab", provider->priv->proposal_icon, "Info proposal 1.2", criteria);
-	list = append_item (list, "bc", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
-	list = append_item (list, "bd", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
+	list = append_item (list, "aaaa", provider->priv->proposal_icon, "Info proposal 1.1", criteria);
+	list = append_item (list, "aaab", provider->priv->proposal_icon, "Info proposal 1.2", criteria);
+	list = append_item (list, "bbbc", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
+	list = append_item (list, "bbbd", provider->priv->proposal_icon, "Info proposal 1.3", criteria);
 
-	if (list != NULL)
-		gtk_source_completion_context_add_proposals (context, base, list);
+	gtk_source_completion_context_add_proposals (context, base, list);
 
 	//TODO Who frees the list?
 

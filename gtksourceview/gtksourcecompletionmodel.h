@@ -76,6 +76,10 @@ void		gtk_source_completion_model_append 	(GtkSourceCompletionModel           *m
 							 GtkSourceCompletionProvider        *provider,
 							 GtkSourceCompletionProposal        *proposal);
 
+void		gtk_source_completion_model_set_proposals (GtkSourceCompletionModel	    *model,
+							   GtkSourceCompletionProvider 	    *provider,
+							   GList		       	    *proposals);
+
 gboolean	gtk_source_completion_model_is_empty 	(GtkSourceCompletionModel           *model,
                                                          gboolean                            invisible);
 

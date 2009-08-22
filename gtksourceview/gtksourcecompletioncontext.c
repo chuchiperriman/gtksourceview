@@ -178,7 +178,7 @@ gtk_source_completion_context_new (GtkSourceCompletionModel	*model,
 		pinfo = g_slice_new (ProviderInfo);
 		pinfo->provider = (GtkSourceCompletionProvider*)g_object_ref(l->data);
 		pinfo->proposals = NULL;
-		pinfo->needs_update = FALSE;
+		pinfo->needs_update = TRUE;
 		g_hash_table_insert (context->priv->pinfo_table, pinfo->provider, pinfo);
 	}
 	update_criteria (context);
@@ -205,34 +205,40 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 
 	pinfo = (ProviderInfo*)g_hash_table_lookup (context->priv->pinfo_table, provider);
 
+	g_debug ("context.add %i", provider);
 	if (pinfo->needs_update)
 	{
+		g_debug ("needs update %i", provider);
 		free_proposals_list (pinfo->proposals);
-		pinfo->proposals = NULL;
+		pinfo->proposals = g_list_copy (proposals);
 		pinfo->needs_update = FALSE;
-		//TODO Set the current proposals in the model (the model will
-		//remove the old proposals and will add the new ones)
-	}
-	
-	if (pinfo->proposals != NULL)
-	{
-		pinfo->proposals = g_list_concat (pinfo->proposals, g_list_copy (proposals));
+		gtk_source_completion_model_set_proposals (context->priv->model,
+							   provider,
+							   pinfo->proposals);
 	}
 	else
 	{
-		pinfo->proposals = g_list_copy (proposals);
-	}
-
-	for (item = proposals; item; item = g_list_next (item))
-	{
-		if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+		if (pinfo->proposals != NULL)
 		{
-			proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-			gtk_source_completion_model_append (context->priv->model,
-	                                                    provider,
-	                                                    proposal);
+			pinfo->proposals = g_list_concat (pinfo->proposals, g_list_copy (proposals));
+		}
+		else
+		{
+			pinfo->proposals = g_list_copy (proposals);
+		}
+
+		for (item = proposals; item; item = g_list_next (item))
+		{
+			if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+			{
+				proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+				gtk_source_completion_model_append (context->priv->model,
+								    provider,
+								    proposal);
+			}
 		}
 	}
+	
 	gtk_source_completion_model_run_add_proposals (context->priv->model);
 
 	g_list_free (proposals);
@@ -333,19 +339,20 @@ gtk_source_completion_context_update (GtkSourceCompletionContext	*context)
 	GList *pinfo_list;
 	GList *l;
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
-	//TODO we will remove this clear and the model will be updated on the fly
-	//gtk_source_completion_model_clear (context->priv->model);
 
 	pinfo_list = g_hash_table_get_values (context->priv->pinfo_table);
 	for (l = pinfo_list; l != NULL; l = g_list_next (l))
 	{
 		pinfo = (ProviderInfo*)l->data;
 		pinfo->needs_update = TRUE;
+		g_debug ("mark %i", pinfo->provider);
 	}
 	g_list_free (pinfo_list);
 	
 	context_clear (context);
 	update_criteria (context);
+
+	gtk_source_completion_model_update (context->priv->model);
 }
 
 void
