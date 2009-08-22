@@ -123,7 +123,6 @@ gtk_source_completion_context_init (GtkSourceCompletionContext *self)
 	self->priv->invalidated = FALSE;
 	self->priv->filter_provider = NULL;
 
-	g_debug ("context init");
 }
 
 static void
@@ -131,7 +130,6 @@ gtk_source_completion_context_finalize (GObject *object)
 {
 	GtkSourceCompletionContext *self = (GtkSourceCompletionContext *)object;
 
-	g_debug ("context finalize");
 	
 	g_free (self->priv->criteria);
 
@@ -205,10 +203,8 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 
 	pinfo = (ProviderInfo*)g_hash_table_lookup (context->priv->pinfo_table, provider);
 
-	g_debug ("context.add %i", provider);
 	if (pinfo->needs_update)
 	{
-		g_debug ("needs update %i", provider);
 		free_proposals_list (pinfo->proposals);
 		pinfo->proposals = g_list_copy (proposals);
 		pinfo->needs_update = FALSE;
@@ -345,7 +341,6 @@ gtk_source_completion_context_update (GtkSourceCompletionContext	*context)
 	{
 		pinfo = (ProviderInfo*)l->data;
 		pinfo->needs_update = TRUE;
-		g_debug ("mark %i", pinfo->provider);
 	}
 	g_list_free (pinfo_list);
 	

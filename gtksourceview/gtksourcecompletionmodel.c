@@ -97,12 +97,13 @@ path_from_list (GtkSourceCompletionModel *model,
                 GList                    *item)
 {
 	gint index = 0;
-	
+
+	g_assert (GTK_IS_SOURCE_COMPLETION_PROPOSAL (((ProposalNode*)item->data)->proposal));
 	index = g_list_position (model->priv->store, item);
 	
 	if (index == -1)
 	{
-		return NULL;
+	  return NULL;
 	}
 	else
 	{
@@ -192,7 +193,6 @@ tree_model_get_path (GtkTreeModel *tree_model,
 	g_return_val_if_fail (iter->user_data != NULL, NULL);
 
 	model = GTK_SOURCE_COMPLETION_MODEL (tree_model);
-	
 	return path_from_list (model, (GList *)iter->user_data);
 }
 
@@ -653,8 +653,10 @@ append_list (GtkSourceCompletionModel *model,
 {
 	GList *item = NULL;
 	
-	if (info)
-		item = g_hash_table_lookup (info->hash, node);
+	g_assert (info != NULL);
+	g_assert (node != NULL);
+
+	item = g_hash_table_lookup (info->hash, node);
 	
 	if (item == NULL)
 	{
@@ -666,11 +668,10 @@ append_list (GtkSourceCompletionModel *model,
 		}
 		else
 		{
-			item = item->next;
+		  item = item->next;
 		}
 		
-		if (info)
-			g_hash_table_insert (info->hash, node, item);
+		g_hash_table_insert (info->hash, node, item);
 		
 		*inserted = TRUE;
 		model->priv->last = item;
@@ -682,7 +683,7 @@ append_list (GtkSourceCompletionModel *model,
 		item->data = node;*/
 		*inserted = FALSE;
 	}
-	
+
 	return item;
 }
 
@@ -694,10 +695,15 @@ remove_node (GtkSourceCompletionModel	*model,
 {
 	g_assert (store_node != NULL);
 	g_assert (path != NULL);
-	
+
 	num_dec (model, node->provider, node->proposal == NULL);
 	free_node (node);
 	
+	if (store_node == model->priv->last)
+	  {
+	    model->priv->last = store_node->prev;
+	  }
+
 	model->priv->store = g_list_delete_link (model->priv->store,store_node);
 		
 	if (model->priv->store == NULL)
@@ -761,7 +767,6 @@ idle_append (gpointer data)
 			header->proposal = NULL;
 			
 			append_list (model, NULL, header, &inserted);*/
-			
 			info = g_slice_new (HeaderInfo);
 			info->needs_update = FALSE;
 			info->item = model->priv->last;
@@ -851,7 +856,6 @@ gtk_source_completion_model_set_proposals (GtkSourceCompletionModel	    *model,
 	GtkSourceCompletionProposal *proposal;
 	RemoveInfo rinfo;
 
-	g_debug ("set proposals");
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
 
@@ -862,35 +866,6 @@ gtk_source_completion_model_set_proposals (GtkSourceCompletionModel	    *model,
 		rinfo.model = model;
 		rinfo.proposals = proposals;
 		g_hash_table_foreach_remove (info->hash, remove_old_proposals, &rinfo);
-		//TODO This is slow, think about a better algorithm
-		/*current_proposals = g_hash_table_get_keys (info->hash);
-
-		if (current_proposals)
-		{
-			path = gtk_tree_path_new_first ();
-			for (l = current_proposals; l != NULL; l = g_list_next (l))
-			{
-				node = (ProposalNode *)l->data;
-				store_node = g_hash_table_lookup (info->hash, node);
-				if (proposals)
-				{
-					item = g_list_find_custom (proposals, node, compare_proposal_node);
-					if (!item)
-					{
-						remove_node (model, node, store_node, path);
-						g_hash_table_remove (info->hash, node);
-					}
-				}
-				else
-				{
-					g_debug ("no proposals");
-					remove_node (model, node, store_node, path);
-					g_hash_table_remove (info->hash, node);
-				}
-			}
-			g_list_free (current_proposals);
-			gtk_tree_path_free (path);
-			}*/
 		gtk_tree_path_free (rinfo.path);
 	}
 
@@ -918,12 +893,11 @@ gtk_source_completion_model_append (GtkSourceCompletionModel    *model,
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROVIDER (provider));
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_PROPOSAL (proposal));
 	
-
 	node = g_slice_new (ProposalNode);
 	node->provider = g_object_ref (provider);
 	node->proposal = g_object_ref (proposal);
 	node->changed_id = 0;
-	
+
 	g_queue_push_tail (model->priv->item_queue, node);
 }
 
@@ -951,7 +925,6 @@ gtk_source_completion_model_clear (GtkSourceCompletionModel *model)
 	GtkTreePath *path;
 	ProposalNode *node;
 
-	g_debug ("clear");
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
 
 	/* Clear the queue of missing elements to append */
