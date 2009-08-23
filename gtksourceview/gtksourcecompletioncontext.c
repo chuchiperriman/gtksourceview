@@ -247,7 +247,6 @@ gtk_source_completion_context_finish (GtkSourceCompletionContext	*context)
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context));
 	g_return_if_fail (!context->priv->invalidated);
 
-	/*TODO We must invalidate the context*/
 	g_signal_emit (context, signals[FINISHED], 0);
 	context->priv->invalidated = TRUE;
 }
@@ -396,12 +395,6 @@ gtk_source_completion_context_set_filter_provider (GtkSourceCompletionContext	*c
 
 	g_list_free (providers);
 
-	/*TODO Hide the completion if it is empty
-	if (gtk_source_completion_model_is_empty (completion->priv->model_proposals, FALSE))
-	{
-	}
-	*/
-	      
 	gtk_source_completion_model_run_add_proposals (context->priv->model);
 }
 
