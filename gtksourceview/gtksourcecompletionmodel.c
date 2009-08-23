@@ -41,7 +41,6 @@ typedef struct
 	GList *item;
 	GHashTable *hash;
 	guint num;
-	gboolean needs_update;
 } HeaderInfo;
 
 typedef struct
@@ -103,7 +102,7 @@ path_from_list (GtkSourceCompletionModel *model,
 	
 	if (index == -1)
 	{
-	  return NULL;
+		return NULL;
 	}
 	else
 	{
@@ -409,28 +408,11 @@ free_node (ProposalNode *node)
 }
 
 static void
-cancel_append (GtkSourceCompletionModel *model)
-{
-	if (model->priv->item_queue != NULL)
-	{
-		g_queue_foreach (model->priv->item_queue,
-				 (GFunc)free_node, NULL);
-		g_queue_clear (model->priv->item_queue);
-	}
-
-	if (model->priv->idle_id != 0)
-	{
-		g_source_remove (model->priv->idle_id);
-		model->priv->idle_id = 0;
-	}
-}
-
-static void
 gtk_source_completion_model_dispose (GObject *object)
 {
 	GtkSourceCompletionModel *model = GTK_SOURCE_COMPLETION_MODEL (object);
 
-	cancel_append (model);
+	gtk_source_completion_model_cancel_add_proposals (model);
 	
 	if (model->priv->item_queue != NULL)
 	{
@@ -501,20 +483,10 @@ static gboolean
 compare_proposals (gconstpointer a,
 		   gconstpointer b)
 {
-  GtkSourceCompletionProposal *p1 = GTK_SOURCE_COMPLETION_PROPOSAL (a);
-  GtkSourceCompletionProposal *p2 = GTK_SOURCE_COMPLETION_PROPOSAL (b);
-  return gtk_source_completion_proposal_equals (p1, p2);
+	GtkSourceCompletionProposal *p1 = GTK_SOURCE_COMPLETION_PROPOSAL (a);
+	GtkSourceCompletionProposal *p2 = GTK_SOURCE_COMPLETION_PROPOSAL (b);
+	return gtk_source_completion_proposal_equals (p1, p2);
 }
-
-static gint
-compare_proposal_node (gconstpointer a,
-		       gconstpointer b)
-{
-	GtkSourceCompletionProposal *p1 = (GtkSourceCompletionProposal *)a;
-	ProposalNode *p2 = (ProposalNode *)b;
-	return gtk_source_completion_proposal_equals (p1, p2->proposal) ? 0 : -1;
-}
-
 
 static guint
 hash_node (gconstpointer v)
@@ -677,7 +649,7 @@ append_list (GtkSourceCompletionModel *model,
 		}
 		else
 		{
-		  item = item->next;
+			item = item->next;
 		}
 		
 		g_hash_table_insert (info->hash, node, item);
@@ -709,9 +681,9 @@ remove_node (GtkSourceCompletionModel	*model,
 	free_node (node);
 	
 	if (store_node == model->priv->last)
-	  {
-	    model->priv->last = store_node->prev;
-	  }
+	{
+		model->priv->last = store_node->prev;
+	}
 
 	model->priv->store = g_list_delete_link (model->priv->store,store_node);
 		
@@ -777,7 +749,6 @@ idle_append (gpointer data)
 			
 			append_list (model, NULL, header, &inserted);*/
 			info = g_slice_new (HeaderInfo);
-			info->needs_update = FALSE;
 			info->item = model->priv->last;
 			info->num = 0;
 			info->hash = g_hash_table_new (hash_node,
@@ -828,9 +799,9 @@ gtk_source_completion_model_run_add_proposals (GtkSourceCompletionModel *model)
 }
 
 static gboolean
-remove_old_proposals (gpointer *key,
-		      gpointer *value,
-		      gpointer *user_data)
+remove_old_proposals (gpointer key,
+		      gpointer value,
+		      gpointer user_data)
 {
 	ProposalNode *node = (ProposalNode *)key;
 	RemoveInfo *rinfo = (RemoveInfo *)user_data;
@@ -875,21 +846,24 @@ gtk_source_completion_model_set_proposals (GtkSourceCompletionModel	    *model,
 		rinfo.path = gtk_tree_path_new_first ();
 		rinfo.model = model;
 		if (proposals)
-		  {
-		    rinfo.proposals = g_hash_table_new (gtk_source_completion_proposal_get_hash,
-							compare_proposals);
-		    for (item = proposals; item; item = g_list_next (item))
-		      {
-			g_hash_table_insert (rinfo.proposals, item->data, item);
-		      }
-		  }
+		{
+			rinfo.proposals = g_hash_table_new ((GHashFunc)gtk_source_completion_proposal_get_hash,
+							    compare_proposals);
+			for (item = proposals; item; item = g_list_next (item))
+			{
+				g_hash_table_insert (rinfo.proposals, item->data, item);
+			}
+		}
 		else
-		  {
-		    rinfo.proposals = NULL;
-		  }
+		{
+			rinfo.proposals = NULL;
+		}
+		
 		g_hash_table_foreach_remove (info->hash, remove_old_proposals, &rinfo);
+
 		if (rinfo.proposals)
-		  g_hash_table_destroy (rinfo.proposals);
+			g_hash_table_destroy (rinfo.proposals);
+		
 		gtk_tree_path_free (rinfo.path);
 	}
 
@@ -925,22 +899,23 @@ gtk_source_completion_model_append (GtkSourceCompletionModel    *model,
 	g_queue_push_tail (model->priv->item_queue, node);
 }
 
-static void
-set_provider_needs_update (GtkSourceCompletionProvider	*provider,
-			   HeaderInfo			*info,
-			   GtkSourceCompletionModel	*model)
-{
-	info->needs_update = TRUE;
-}
-
 void
-gtk_source_completion_model_update (GtkSourceCompletionModel    *model)
+gtk_source_completion_model_cancel_add_proposals (GtkSourceCompletionModel    *model)
 {
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
 
-	/*Clear the queue because the model will be updated*/
-	cancel_append (model);
-	g_hash_table_foreach (model->priv->num_per_provider, (GHFunc)set_provider_needs_update, model);
+	if (model->priv->item_queue != NULL)
+	{
+		g_queue_foreach (model->priv->item_queue,
+				 (GFunc)free_node, NULL);
+		g_queue_clear (model->priv->item_queue);
+	}
+
+	if (model->priv->idle_id != 0)
+	{
+		g_source_remove (model->priv->idle_id);
+		model->priv->idle_id = 0;
+	}
 }
 
 void
@@ -952,7 +927,7 @@ gtk_source_completion_model_clear (GtkSourceCompletionModel *model)
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
 
 	/* Clear the queue of missing elements to append */
-	cancel_append (model);
+	gtk_source_completion_model_cancel_add_proposals (model);
 	
 	path = gtk_tree_path_new_first ();
 	

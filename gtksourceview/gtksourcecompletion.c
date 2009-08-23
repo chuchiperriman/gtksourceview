@@ -210,7 +210,10 @@ context_populate (GtkSourceCompletion	*completion,
 	/* Make sure all providers are ours */
 	for (l = providers; l; l = g_list_next (l))
 	{
-		if (g_list_find (completion->priv->providers,
+		/*Check if the context has been invalidated*/
+		if (completion->priv->context &&
+		    gtk_source_completion_context_is_valid (completion->priv->context) &&
+		    g_list_find (completion->priv->providers,
 		                 l->data) != NULL)
 		{
 			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),

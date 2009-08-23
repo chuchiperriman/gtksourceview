@@ -102,7 +102,7 @@ gboolean 	gtk_source_completion_model_iter_previous (GtkSourceCompletionModel   
 gboolean 	gtk_source_completion_model_iter_last 	(GtkSourceCompletionModel           *model,
 							 GtkTreeIter                        *iter);
 
-void		gtk_source_completion_model_update	(GtkSourceCompletionModel	    *model);
+void		gtk_source_completion_model_cancel_add_proposals (GtkSourceCompletionModel  *model);
 
 G_END_DECLS
 
