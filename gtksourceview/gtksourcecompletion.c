@@ -109,9 +109,6 @@ struct _GtkSourceCompletionPrivate
 	gint typing_line;
 	gint typing_line_offset;
 
-	/*TODO remove this*/
-	GtkSourceCompletionProvider *filter_provider;
-
 	GtkSourceCompletionContext *context;
 	
 	gboolean is_interactive;
@@ -119,6 +116,8 @@ struct _GtkSourceCompletionPrivate
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
+
+static void update_selection_label (GtkSourceCompletion *completion);
 
 G_DEFINE_TYPE(GtkSourceCompletion, gtk_source_completion, G_TYPE_OBJECT);
 
@@ -217,6 +216,12 @@ context_populate (GtkSourceCompletion	*completion,
 			gtk_source_completion_provider_populate_completion (GTK_SOURCE_COMPLETION_PROVIDER (l->data),
 									    completion->priv->context);
 		}
+	}
+
+	if (completion->priv->context &&
+	    gtk_source_completion_context_is_valid (completion->priv->context))
+	{
+		update_selection_label (completion);
 	}
 }
 
@@ -485,17 +490,19 @@ get_num_visible_providers (GtkSourceCompletion *completion,
                            guint               *num,
                            guint               *current)
 {
+	GtkSourceCompletionProvider *filter_provider;
 	GList *providers;
 	GList *proposals;
 	GList *item;
 	*num = 0;
 	*current = 0;
-	
+
 	providers = gtk_source_completion_context_get_providers (completion->priv->context);
+	filter_provider = gtk_source_completion_context_get_filter_provider (completion->priv->context);
 	
 	for (item = providers; item; item = g_list_next (item))
 	{
-		if (item->data == completion->priv->filter_provider)
+		if (item->data == filter_provider)
 		{
 			*current = ++*num;
 		}
@@ -519,10 +526,12 @@ update_selection_label (GtkSourceCompletion *completion)
 	guint num;
 	gchar *name;
 	gchar *tmp;
-	
+	GtkSourceCompletionProvider *filter_provider;
+
+	filter_provider = gtk_source_completion_context_get_filter_provider (completion->priv->context);
 	get_num_visible_providers (completion, &num, &pos);
 	
-	if (completion->priv->filter_provider == NULL)
+	if (!filter_provider)
 	{
 		name = g_strdup_printf("[<i>%s</i>]", _("All"));
 		
@@ -530,12 +539,10 @@ update_selection_label (GtkSourceCompletion *completion)
 	}
 	else
 	{
-		name = g_markup_escape_text (
-			gtk_source_completion_provider_get_name (completion->priv->filter_provider),
-								 -1);
+		name = g_markup_escape_text (gtk_source_completion_provider_get_name (filter_provider), -1);
 
 		gtk_image_set_from_pixbuf (GTK_IMAGE (completion->priv->selection_image),
-                           (GdkPixbuf *)gtk_source_completion_provider_get_icon (completion->priv->filter_provider));
+                           (GdkPixbuf *)gtk_source_completion_provider_get_icon (filter_provider));
 	}
 	
 	if (num > 1)
@@ -569,10 +576,12 @@ select_provider (GtkSourceCompletion *completion,
 	GList *current;
 	GList *proposals;
 	GtkSourceCompletionProvider *provider;
+	GtkSourceCompletionProvider *filter_provider;
 	guint num;
 	guint pos;
 
 	providers = gtk_source_completion_context_get_providers (completion->priv->context);
+	filter_provider = gtk_source_completion_context_get_filter_provider (completion->priv->context);
 	/* If there is only one provider, then there is no other selection */
 	if (providers->next == NULL)
 	{
@@ -583,23 +592,18 @@ select_provider (GtkSourceCompletion *completion,
 	
 	if (num <= 1)
 	{
-		if (completion->priv->filter_provider != NULL)
+		if (filter_provider)
 		{
-			completion->priv->filter_provider = NULL;
-			
-			//do_refilter (completion, FALSE);
 			update_selection_label (completion);
-
 			return TRUE;
 		}
 
 		return FALSE;
 	}
 
-	if (completion->priv->filter_provider != NULL)
+	if (filter_provider)
 	{
-		orig = g_list_find (providers,
-		                    completion->priv->filter_provider);
+		orig = g_list_find (providers,filter_provider);
 	}
 	else
 	{
@@ -647,17 +651,17 @@ select_provider (GtkSourceCompletion *completion,
 	
 	if (current != NULL)
 	{
-		completion->priv->filter_provider = current->data;
+		filter_provider = current->data;
 	}
 	else
 	{
-		completion->priv->filter_provider = NULL;
+		filter_provider = NULL;
 	}
 	
-	update_selection_label (completion);
-	//TODO do_refilter (completion, FALSE);
 	gtk_source_completion_context_set_filter_provider (completion->priv->context,
-							   completion->priv->filter_provider);
+							   filter_provider);
+
+	update_selection_label (completion);
 	
 	return TRUE;
 }
@@ -1119,8 +1123,6 @@ buffer_delete_range_cb (GtkTextBuffer       *buffer,
 		}
 		else
 		{
-			//FIXME create the context, remove items, and add new ones
-			//refilter_proposals_with_word (completion);
 			context_populate (completion, NULL);
 		}
 	}
@@ -1156,9 +1158,6 @@ buffer_insert_text_cb (GtkTextBuffer       *buffer,
 		}
 		else
 		{
-			//TODO update the context iter and criteria and call
-			//all providers to populate again
-			//refilter_proposals_with_word (completion);
 			context_populate (completion, NULL);
 		}
 	}
@@ -1338,8 +1337,6 @@ gtk_source_completion_hide_default (GtkSourceCompletion *completion)
 {
 	gtk_widget_hide (completion->priv->info_window);
 	gtk_widget_hide (completion->priv->window);
-
-	completion->priv->filter_provider = NULL;
 
 	gtk_label_set_markup (GTK_LABEL (completion->priv->default_info), "");
 
@@ -1961,7 +1958,8 @@ gtk_source_completion_show (GtkSourceCompletion *completion,
 	
 	completion->priv->is_interactive = FALSE;
 
-	update_selection_label (completion);
+	if (completion->priv->context)
+		update_selection_label (completion);
 	
 	return TRUE;
 }

@@ -404,3 +404,11 @@ gtk_source_completion_context_set_filter_provider (GtkSourceCompletionContext	*c
 	      
 	gtk_source_completion_model_run_add_proposals (context->priv->model);
 }
+
+GtkSourceCompletionProvider*
+gtk_source_completion_context_get_filter_provider (GtkSourceCompletionContext *context)
+{
+	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_CONTEXT (context), NULL);
+
+	return context->priv->filter_provider;
+}

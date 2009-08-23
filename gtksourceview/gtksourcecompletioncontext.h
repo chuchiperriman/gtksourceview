@@ -95,6 +95,8 @@ void				 gtk_source_completion_context_update		(GtkSourceCompletionContext	*cont
 void				 gtk_source_completion_context_set_filter_provider(GtkSourceCompletionContext	*context,
 										   GtkSourceCompletionProvider	*provider);
 
+GtkSourceCompletionProvider	*gtk_source_completion_context_get_filter_provider(GtkSourceCompletionContext *context);
+
 G_END_DECLS
 
 #endif
