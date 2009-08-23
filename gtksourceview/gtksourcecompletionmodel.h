@@ -90,12 +90,6 @@ void 		gtk_source_completion_model_clear 	(GtkSourceCompletionModel           *m
 
 void		gtk_source_completion_model_refilter	(GtkSourceCompletionModel           *model);
 
-void 		gtk_source_completion_model_set_show_headers (GtkSourceCompletionModel      *model,
-							      gboolean                       show_headers);
-
-gboolean	gtk_source_completion_model_iter_is_header (GtkSourceCompletionModel        *model,
-                                                            GtkTreeIter                     *iter);
-
 gboolean 	gtk_source_completion_model_iter_previous (GtkSourceCompletionModel         *model,
 							   GtkTreeIter                      *iter);
 							 

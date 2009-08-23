@@ -60,8 +60,6 @@ struct _GtkSourceCompletionModelPrivate
 	guint num;
 	GHashTable *num_per_provider;
 	
-	gboolean show_headers;
-	
 	guint idle_id;
 	GQueue *item_queue;
 };
@@ -247,14 +245,7 @@ static gboolean
 get_next_element (GList *item,
 		  GtkTreeIter *iter)
 {
-	while ((item = g_list_next (item)))
-	{
-		ProposalNode *node = (ProposalNode *)item->data;
-		
-		/* Skip headers */
-		if (node->proposal != NULL)
-			break;
-	}
+	item = g_list_next (item);
 	
 	if (item != NULL)
 	{
@@ -551,74 +542,6 @@ num_dec (GtkSourceCompletionModel    *model,
 	}
 }
 
-static void
-update_show_headers (GtkSourceCompletionModel *model,
-                     gboolean                  show)
-{
-	GtkSourceCompletionProvider *provider;
-	HeaderInfo *info;
-	guint num = 0;
-	GList *items = NULL;
-	GList *item;
-	GHashTableIter hiter;
-	
-	ProposalNode *node;
-	GtkTreePath *path;
-	GtkTreeIter iter;
-	
-	if (!model->priv->show_headers)
-	{
-		return;
-	}
-	
-	/* Check headers */
-	g_hash_table_iter_init (&hiter, model->priv->num_per_provider);
-	
-	while (g_hash_table_iter_next (&hiter, (gpointer *)&provider, (gpointer *)&info))
-	{
-		if (info->num > 0)
-		{
-			node = (ProposalNode *)info->item->data;
-			++num;
-			
-			items = g_list_append (items, info);
-		}
-	}
-
-	if (show && num > 1 && items != NULL)
-	{
-		for (item = items; item; item = g_list_next (item))
-		{
-			info = (HeaderInfo *)item->data;
-			node = (ProposalNode *)info->item->data;
-			
-			iter.user_data = info->item;
-			
-			num_inc (model, node->provider, TRUE);
-
-			path = path_from_list (model, info->item);
-			gtk_tree_model_row_inserted (GTK_TREE_MODEL (model),
-			                             path,
-			                             &iter);
-			gtk_tree_path_free (path);
-		}
-	}
-	
-	if (!show && num <= 1 && items)
-	{
-		info = (HeaderInfo *)items->data;
-		node = (ProposalNode *)info->item->data;
-		
-		num_dec (model, node->provider, TRUE);
-
-		path = path_from_list (model, info->item);
-		gtk_tree_model_row_deleted (GTK_TREE_MODEL (model), path);
-		gtk_tree_path_free (path);
-	}
-
-	g_list_free (items);
-}
-
 /* Public */
 GtkSourceCompletionModel*
 gtk_source_completion_model_new (void)
@@ -724,7 +647,6 @@ idle_append (gpointer data)
 	while (i < ITEMS_PER_CALLBACK)
 	{
 		ProposalNode *node = (ProposalNode *)g_queue_pop_head (model->priv->item_queue);
-		ProposalNode *header = NULL;
 		GtkTreeIter iter;
 		gboolean inserted;
 		
@@ -738,16 +660,10 @@ idle_append (gpointer data)
 			return FALSE;
 		}
 		
-		/* Check if it is a header */
 		info = g_hash_table_lookup (model->priv->num_per_provider, node->provider);
 		
 		if (info == NULL)
 		{
-			/*header = g_slice_new (ProposalNode);
-			header->provider = g_object_ref (node->provider);
-			header->proposal = NULL;
-			
-			append_list (model, NULL, header, &inserted);*/
 			info = g_slice_new (HeaderInfo);
 			info->item = model->priv->last;
 			info->num = 0;
@@ -768,12 +684,6 @@ idle_append (gpointer data)
 			path = path_from_list (model, item);
 			gtk_tree_model_row_inserted (GTK_TREE_MODEL (model), path, &iter);
 			gtk_tree_path_free (path);
-		}
-		
-		if (header != NULL)
-		{
-			g_warning ("header");
-			update_show_headers (model, TRUE);
 		}
 		
 		node->changed_id = g_signal_connect (node->proposal, 
@@ -978,30 +888,6 @@ gtk_source_completion_model_n_proposals (GtkSourceCompletionModel    *model,
 	{
 		return info->num;
 	}
-}
-
-void 
-gtk_source_completion_model_set_show_headers (GtkSourceCompletionModel *model,
-					      gboolean                  show_headers)
-{
-	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
-	
-	if (model->priv->show_headers != show_headers)
-	{
-		model->priv->show_headers = show_headers;
-		//update_show_headers (model, show_headers);
-	}
-}
-
-gboolean
-gtk_source_completion_model_iter_is_header (GtkSourceCompletionModel *model,
-                                            GtkTreeIter              *iter)
-{
-	g_return_val_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model), FALSE);
-	g_return_val_if_fail (iter != NULL, FALSE);
-	g_return_val_if_fail (iter->user_data != NULL, FALSE);
-
-	return node_from_iter (iter)->proposal == NULL;
 }
 
 gboolean

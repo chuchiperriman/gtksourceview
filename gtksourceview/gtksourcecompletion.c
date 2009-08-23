@@ -62,7 +62,6 @@ enum
 	PROP_MANAGE_KEYS,
 	PROP_REMEMBER_INFO_VISIBILITY,
 	PROP_SELECT_ON_SHOW,
-	PROP_SHOW_HEADERS,
 	
 	PROP_MINIMUM_AUTO_COMPLETE_LENGTH,
 	PROP_AUTO_COMPLETE_DELAY
@@ -97,7 +96,6 @@ struct _GtkSourceCompletionPrivate
 	gboolean remember_info_visibility;
 	gboolean info_visible;
 	gboolean select_on_show;
-	gboolean show_headers;
 	
 	/* Completion management */
 	GtkSourceView *view;
@@ -350,12 +348,6 @@ selector_first (GtkSourceCompletion *completion,
 	hasfirst = ret;
 	first = *iter;
 	
-	while (ret && gtk_source_completion_model_iter_is_header (
-			GTK_SOURCE_COMPLETION_MODEL (model), iter))
-	{
-		ret = gtk_tree_model_iter_next (model, iter);
-	}
-	
 	if (hasfirst && !ret)
 	{
 		scroll_to_iter (completion, model, &first);
@@ -381,13 +373,6 @@ selector_last (GtkSourceCompletion *completion,
 	haslast = ret;
 	last = *iter;
 
-	while (ret && gtk_source_completion_model_iter_is_header (
-			GTK_SOURCE_COMPLETION_MODEL (model), iter))
-	{
-		ret = gtk_source_completion_model_iter_previous (GTK_SOURCE_COMPLETION_MODEL (model), 
-		                                                 iter);
-	}
-	
 	if (haslast && !ret)
 	{
 		scroll_to_iter (completion, model, &last);
@@ -419,14 +404,9 @@ selector_previous (GtkSourceCompletion *completion,
 	while (num > 0 && gtk_source_completion_model_iter_previous (
 				GTK_SOURCE_COMPLETION_MODEL (model), &next))
 	{
-		if (!gtk_source_completion_model_iter_is_header (GTK_SOURCE_COMPLETION_MODEL (model),
-		                                                 &next))
-		{
-			ret = TRUE;
-			*iter = next;
-			--num;
-		}
-
+		ret = TRUE;
+		*iter = next;
+		--num;
 		last = next;
 	}
 	
@@ -460,14 +440,9 @@ selector_next (GtkSourceCompletion *completion,
 
 	while (num > 0 && gtk_tree_model_iter_next (model, &next))
 	{
-		if (!gtk_source_completion_model_iter_is_header (GTK_SOURCE_COMPLETION_MODEL (model),
-		                                                 &next))
-		{
-			ret = TRUE;
-			*iter = next;
-			--num;
-		}
-		
+		ret = TRUE;
+		*iter = next;
+		--num;
 		last = next;
 	}
 	
@@ -1312,9 +1287,6 @@ gtk_source_completion_get_property (GObject    *object,
 		case PROP_SELECT_ON_SHOW:
 			g_value_set_boolean (value, completion->priv->select_on_show);
 			break;
-		case PROP_SHOW_HEADERS:
-			g_value_set_boolean (value, completion->priv->show_headers);
-			break;
 		case PROP_AUTO_COMPLETE_DELAY:
 			g_value_set_uint (value, completion->priv->auto_complete_delay);
 			break;
@@ -1351,15 +1323,6 @@ gtk_source_completion_set_property (GObject      *object,
 			break;
 		case PROP_SELECT_ON_SHOW:
 			completion->priv->select_on_show = g_value_get_boolean (value);
-			break;
-		case PROP_SHOW_HEADERS:
-			completion->priv->show_headers = g_value_get_boolean (value);
-			
-			if (completion->priv->model_proposals != NULL)
-			{
-				gtk_source_completion_model_set_show_headers (completion->priv->model_proposals,
-				                                              completion->priv->show_headers);
-			}
 			break;
 		case PROP_AUTO_COMPLETE_DELAY:
 			completion->priv->auto_complete_delay = g_value_get_uint (value);
@@ -1473,21 +1436,6 @@ gtk_source_completion_class_init (GtkSourceCompletionClass *klass)
 							      G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 
 	/**
-	 * GtkSourceCompletion:show-headers:
-	 *
-	 * Determines whether provider headers should be shown in the proposal
-	 * list if there is more than one provider with proposals.
-	 *
-	 */
-	g_object_class_install_property (object_class,
-					 PROP_SHOW_HEADERS,
-					 g_param_spec_boolean ("show-headers",
-							      _("Show Headers"),
-							      _("Show provider headers when proposals from multiple providers are available"),
-							      TRUE,
-							      G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
-
-	/**
 	 * GtkSourceCompletion:auto-complete-delay:
 	 *
 	 * Determines the popup delay (in milliseconds) at which the completion
@@ -1561,27 +1509,14 @@ render_proposal_icon_func (GtkTreeViewColumn   *column,
                            GtkTreeIter         *iter,
                            GtkSourceCompletion *completion)
 {
-	gboolean isheader;
 	GdkPixbuf *icon;
 	GtkStyle *style;
 	
-	isheader = gtk_source_completion_model_iter_is_header (completion->priv->model_proposals, 
-	                                                       iter);
-	
 	style = gtk_widget_get_style (GTK_WIDGET (completion->priv->tree_view_proposals));
 	
-	if (isheader)
-	{
-		g_object_set (cell, 
-		              "cell-background-gdk", &(style->bg[GTK_STATE_INSENSITIVE]), 
-		              NULL);
-	}
-	else
-	{
-		g_object_set (cell,
-		              "cell-background-set", FALSE,
-		              NULL);
-	}
+	g_object_set (cell,
+		      "cell-background-set", FALSE,
+		      NULL);
 	
 	gtk_tree_model_get (model, 
 	                    iter, 
@@ -1606,60 +1541,28 @@ render_proposal_text_func (GtkTreeViewColumn   *column,
 {
 	gchar *label;
 	gchar *markup;
-	GtkSourceCompletionProvider *provider;
-	gboolean isheader;
-	GtkStyle *style;
 	
-	isheader = gtk_source_completion_model_iter_is_header (completion->priv->model_proposals, 
-		                                               iter);
+	gtk_tree_model_get (model, 
+			    iter, 
+			    GTK_SOURCE_COMPLETION_MODEL_COLUMN_LABEL, 
+			    &label, 
+			    GTK_SOURCE_COMPLETION_MODEL_COLUMN_MARKUP, 
+			    &markup,
+			    -1);
 
-	if (isheader)
+	if (!markup)
 	{
-		gtk_tree_model_get (model, 
-		                    iter, 
-		                    GTK_SOURCE_COMPLETION_MODEL_COLUMN_PROVIDER, 
-		                    &provider, 
-		                    -1);
-		
-		label = g_strdup_printf ("<b>%s</b>", 
-		                        g_markup_escape_text (gtk_source_completion_provider_get_name (provider),
-		                                              -1));
-
-		style = gtk_widget_get_style (GTK_WIDGET (completion->priv->tree_view_proposals));
-
-		g_object_set (cell, 
-		              "markup", label,
-		              "background-gdk", &(style->bg[GTK_STATE_INSENSITIVE]), 
-		              "foreground-gdk", &(style->fg[GTK_STATE_INSENSITIVE]), 
-		              NULL);
-		g_free (label);
-		
-		g_object_unref (provider);
+		markup = g_markup_escape_text (label ? label : "", -1);
 	}
-	else
-	{
-		gtk_tree_model_get (model, 
-		                    iter, 
-		                    GTK_SOURCE_COMPLETION_MODEL_COLUMN_LABEL, 
-		                    &label, 
-		                    GTK_SOURCE_COMPLETION_MODEL_COLUMN_MARKUP, 
-		                    &markup,
-		                    -1);
-
-		if (!markup)
-		{
-			markup = g_markup_escape_text (label ? label : "", -1);
-		}
-
-		g_object_set (cell, 
-		              "markup", markup, 
-		              "background-set", FALSE, 
-		              "foreground-set", FALSE,
-		              NULL);
-
-		g_free (label);
-		g_free (markup);
-	}
+	
+	g_object_set (cell, 
+		      "markup", markup, 
+		      "background-set", FALSE, 
+		      "foreground-set", FALSE,
+		      NULL);
+	
+	g_free (label);
+	g_free (markup);
 }
 
 static gboolean
@@ -1673,15 +1576,7 @@ selection_func (GtkTreeSelection    *selection,
 	
 	gtk_tree_model_get_iter (model, &iter, path);
 	
-	if (gtk_source_completion_model_iter_is_header (completion->priv->model_proposals,
-	                                                &iter))
-	{
-		return path_currently_selected;
-	}
-	else
-	{
-		return TRUE;
-	}
+	return TRUE;
 }
 
 static void
@@ -1737,8 +1632,6 @@ initialize_proposals_ui (GtkSourceCompletion *completion)
 			  G_CALLBACK (on_items_added_cb),
 			  completion);
 
-	gtk_source_completion_model_set_show_headers (completion->priv->model_proposals,
-				                      completion->priv->show_headers);
 	tree_view = gtk_tree_view_new_with_model (GTK_TREE_MODEL (completion->priv->model_proposals));
 	completion->priv->tree_view_proposals = tree_view;
 
