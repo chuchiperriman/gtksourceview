@@ -1,4 +1,4 @@
-/*
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8; coding: utf-8 -*- 
  * gtksourcecompletionmodel.c
  * This file is part of gtksourcecompletion
  *
@@ -47,7 +47,7 @@ typedef struct
 typedef struct
 {
 	GtkSourceCompletionModel *model;
-	GList *proposals;
+	GHashTable *proposals;
 	GtkTreePath *path;
 } RemoveInfo;
 	
@@ -497,6 +497,15 @@ compare_nodes (gconstpointer a,
 	return gtk_source_completion_proposal_equals (p1->proposal, p2->proposal);
 }
 
+static gboolean
+compare_proposals (gconstpointer a,
+		   gconstpointer b)
+{
+  GtkSourceCompletionProposal *p1 = GTK_SOURCE_COMPLETION_PROPOSAL (a);
+  GtkSourceCompletionProposal *p2 = GTK_SOURCE_COMPLETION_PROPOSAL (b);
+  return gtk_source_completion_proposal_equals (p1, p2);
+}
+
 static gint
 compare_proposal_node (gconstpointer a,
 		       gconstpointer b)
@@ -829,7 +838,8 @@ remove_old_proposals (gpointer *key,
 	GList *item;
 	if (rinfo->proposals)
 	{
-		item = g_list_find_custom (rinfo->proposals, node, compare_proposal_node);
+	  //item = g_list_find_custom (rinfo->proposals, node, compare_proposal_node);
+		item = g_hash_table_lookup (rinfo->proposals, node->proposal);
 		if (!item)
 		{
 			remove_node (rinfo->model, node, store_node, rinfo->path);
@@ -864,8 +874,22 @@ gtk_source_completion_model_set_proposals (GtkSourceCompletionModel	    *model,
 	{
 		rinfo.path = gtk_tree_path_new_first ();
 		rinfo.model = model;
-		rinfo.proposals = proposals;
+		if (proposals)
+		  {
+		    rinfo.proposals = g_hash_table_new (gtk_source_completion_proposal_get_hash,
+							compare_proposals);
+		    for (item = proposals; item; item = g_list_next (item))
+		      {
+			g_hash_table_insert (rinfo.proposals, item->data, item);
+		      }
+		  }
+		else
+		  {
+		    rinfo.proposals = NULL;
+		  }
 		g_hash_table_foreach_remove (info->hash, remove_old_proposals, &rinfo);
+		if (rinfo.proposals)
+		  g_hash_table_destroy (rinfo.proposals);
 		gtk_tree_path_free (rinfo.path);
 	}
 
