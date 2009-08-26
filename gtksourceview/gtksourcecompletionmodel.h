@@ -88,8 +88,6 @@ guint		gtk_source_completion_model_n_proposals (GtkSourceCompletionModel        
 
 void 		gtk_source_completion_model_clear 	(GtkSourceCompletionModel           *model);
 
-void		gtk_source_completion_model_refilter	(GtkSourceCompletionModel           *model);
-
 gboolean 	gtk_source_completion_model_iter_previous (GtkSourceCompletionModel         *model,
 							   GtkTreeIter                      *iter);
 							 

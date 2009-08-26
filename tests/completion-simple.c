@@ -208,7 +208,6 @@ create_completion(void)
 
 	icon = get_icon_from_theme (GTK_STOCK_CLOSE);
 
-	/*
 	prov_test1 = gsc_provider_async_new ("Async", icon);
 	if (icon != NULL)
 	{
@@ -218,8 +217,7 @@ create_completion(void)
 	g_thread_init (NULL);
 	
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
-	*/
-	
+
 #ifdef HAVE_DEVHELP
 	g_debug ("Devhelp provider enabled");
 	GscProviderDevhelp *prov_devhelp;

@@ -209,9 +209,12 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 		free_proposals_list (pinfo->proposals);
 		pinfo->proposals = g_list_copy (proposals);
 		pinfo->needs_update = FALSE;
-		gtk_source_completion_model_set_proposals (context->priv->model,
-							   provider,
-							   pinfo->proposals);
+		if (context->priv->filter_provider == NULL || provider == context->priv->filter_provider)
+		{
+			gtk_source_completion_model_set_proposals (context->priv->model,
+								   provider,
+								   pinfo->proposals);
+		}
 	}
 	else
 	{
@@ -224,14 +227,17 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 			pinfo->proposals = g_list_copy (proposals);
 		}
 
-		for (item = proposals; item; item = g_list_next (item))
+		if (context->priv->filter_provider == NULL || provider == context->priv->filter_provider)
 		{
-			if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+			for (item = proposals; item; item = g_list_next (item))
 			{
-				proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
-				gtk_source_completion_model_append (context->priv->model,
-								    provider,
-								    proposal);
+				if (GTK_IS_SOURCE_COMPLETION_PROPOSAL (item->data))
+				{
+					proposal = GTK_SOURCE_COMPLETION_PROPOSAL (item->data);
+					gtk_source_completion_model_append (context->priv->model,
+									    provider,
+									    proposal);
+				}
 			}
 		}
 	}
