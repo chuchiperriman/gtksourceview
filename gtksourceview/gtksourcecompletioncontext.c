@@ -202,8 +202,6 @@ gtk_source_completion_context_add_proposals (GtkSourceCompletionContext		*contex
 
 	g_list_foreach (proposals, (GFunc)g_object_ref, NULL);
 
-	
-
 	if (pinfo->needs_update)
 	{
 		free_proposals_list (pinfo->proposals);

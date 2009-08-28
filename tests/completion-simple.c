@@ -30,7 +30,6 @@
 #include <gtksourceview/gtksourcecompletioninfo.h>
 
 #include "gsc-provider-test.h"
-#include "gsc-provider-async.h"
 
 #ifdef HAVE_DEVHELP
 #include <devhelp/dh-base.h>
@@ -203,18 +202,6 @@ create_completion(void)
 	{
 		g_object_unref (icon);
 	}
-	
-	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
-
-	icon = get_icon_from_theme (GTK_STOCK_CLOSE);
-
-	prov_test1 = gsc_provider_async_new ("Async", icon);
-	if (icon != NULL)
-	{
-		g_object_unref (icon);
-	}
-
-	g_thread_init (NULL);
 	
 	gtk_source_completion_add_provider (comp, GTK_SOURCE_COMPLETION_PROVIDER (prov_test1), NULL);
 

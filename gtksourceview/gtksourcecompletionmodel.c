@@ -814,17 +814,17 @@ gtk_source_completion_model_cancel_add_proposals (GtkSourceCompletionModel    *m
 {
 	g_return_if_fail (GTK_IS_SOURCE_COMPLETION_MODEL (model));
 
+	if (model->priv->idle_id != 0)
+	{
+		g_source_remove (model->priv->idle_id);
+		model->priv->idle_id = 0;
+	}
+	
 	if (model->priv->item_queue != NULL)
 	{
 		g_queue_foreach (model->priv->item_queue,
 				 (GFunc)free_node, NULL);
 		g_queue_clear (model->priv->item_queue);
-	}
-
-	if (model->priv->idle_id != 0)
-	{
-		g_source_remove (model->priv->idle_id);
-		model->priv->idle_id = 0;
 	}
 }
 
