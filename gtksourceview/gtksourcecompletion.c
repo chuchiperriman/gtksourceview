@@ -1073,12 +1073,19 @@ show_auto_completion (GtkSourceCompletion *completion)
 	                                                  &iter,
 							  &start,
 							  &end);
-	
-	/* Check minimum amount of characters */
-	if (g_utf8_strlen (word, -1) >= 1)
+
+	if (!GTK_WIDGET_VISIBLE (completion->priv->window))
 	{
-		gtk_source_completion_show (completion, providers, &start);
-		completion->priv->is_interactive = TRUE;
+		/* Check minimum amount of characters */
+		if (g_utf8_strlen (word, -1) >= 1)
+		{
+			gtk_source_completion_show (completion, providers, &start);
+			completion->priv->is_interactive = TRUE;
+		}
+	}
+	else
+	{
+		context_populate (completion, NULL);
 	}
 
 	g_free (word);
@@ -1144,23 +1151,7 @@ buffer_insert_text_cb (GtkTextBuffer       *buffer,
 		return;
 	}
 	
-	if (!GTK_WIDGET_VISIBLE (completion->priv->window))
-	{
-		interactive_do_show (completion);
-	}
-	else
-	{
-		if ((completion->priv->is_interactive &&
-		    g_unichar_isspace (g_utf8_get_char (text))) ||
-		    gtk_text_iter_get_line (location) != completion->priv->typing_line)
-		{
-			gtk_source_completion_hide (completion);
-		}
-		else
-		{
-			context_populate (completion, NULL);
-		}
-	}
+	interactive_do_show (completion);
 }
 
 static void
